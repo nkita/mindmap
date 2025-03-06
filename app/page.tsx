@@ -17,6 +17,7 @@ import {
   type Connection,
   type NodeMouseHandler,
   type OnSelectionChangeParams,
+  useKeyPress,
 } from '@xyflow/react';
 
 import dagre from '@dagrejs/dagre';
@@ -72,6 +73,7 @@ const getLayoutedElements = (
 
 const Flow = () => {
   const { getNode } = useReactFlow();
+
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [currentNodeId, setCurrentNodeId] = useState("2");
@@ -95,13 +97,13 @@ const Flow = () => {
         ...node, type: node.type
       }))]);
       setEdges([...layoutedEdges.map(edge => ({
-        ...edge, type: edge.type || 'smoothstep' // Ensure type is always defined
+        ...edge, type: edge.type || 'bezier' // Ensure type is always defined
       }))]);
     },
     [nodes, edges, getNode, currentNodeId, setNodes, setEdges],
   );
 
-  const handleAddNode = (selectedNodes: Node[]) => {
+  const handleAddNode = (selectedNodes: Node[], direction: "parallell" | "series") => {
     const i = crypto.randomUUID();
     const newNode = {
       id: i,
@@ -110,20 +112,32 @@ const Flow = () => {
       position: { x: 0, y: 0 },
       selected: true,
     }
-    const sourceNodeId = selectedNodes.length === 1 ? selectedNodes[0] : nodes[0];
+    let sourceNodeId = "root"
+    if (selectedNodes.length === 1) {
+      const i = selectedNodes[0].id;
+      if (direction === "series") {
+        sourceNodeId = i
+      } else if (direction === "parallell") {
+        const edge = edges.find(edge => edge.target === i);
+        sourceNodeId = edge?.source ?? i;
+      }
+    } else if (selectedNodes.length > 1) {
+      sourceNodeId = nodes[0].id;
+    } else {
+      sourceNodeId = nodes[0].id;
+    }
     const newEdge = {
       id: crypto.randomUUID(),
-      source: sourceNodeId.id,
+      source: sourceNodeId,
       target: i,
-      type: 'smoothstep',
+      type: 'bezier',
     }
-    console.log(newNode, sourceNodeId, newEdge);
     const { nodes: layoutedNodes, edges: layoutedEdges } =
-      getLayoutedElements([newNode, ...nodes], [...edges, newEdge], 'LR', getNode, currentNodeId);
+      getLayoutedElements([newNode, ...nodes.map(node => ({ ...node, selected: false }))], [...edges, newEdge], 'LR', getNode, currentNodeId);
     setNodes([...layoutedNodes.map(node => ({ ...node, type: node.type }))] as Node[]);
     setEdges([...layoutedEdges.map(edge => ({
       ...edge,
-      type: edge.type || 'smoothstep' // Ensure type is always defined
+      type: edge.type || 'bezier' // Ensure type is always defined
     }))]);
   }
   useEffect(() => {
@@ -136,18 +150,29 @@ const Flow = () => {
 
   const handleSelectionChange = (params: OnSelectionChangeParams) => setSelectedNodes(params.nodes);
 
+  const handleKeyDown = (event: KeyboardEvent) => {
+    console.log(event.key);
+    if (event.key === 'Tab') {
+      handleAddNode(selectedNodes, "series");
+    }
+    if (event.key === 'Enter') {
+      handleAddNode(selectedNodes, "parallell");
+    }
+  }
 
   return (
     <div style={{ height: '100vh', width: '100vw' }}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
+        onKeyDown={handleKeyDown}
         onSelectionChange={handleSelectionChange}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         nodeTypes={{ middleNode: MiddleNode }}
         connectionLineType={ConnectionLineType.SmoothStep}
+
         fitView={true}
         style={{ backgroundColor: "#F7F9FB" }}
       >
