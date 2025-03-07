@@ -1,6 +1,6 @@
 import { Node } from '@xyflow/react';
 const position = { x: 0, y: 0 };
-const edgeType = 'bezier';
+const edgeType = 'default';
 
 export const initialNodes: Node[] = [
   {

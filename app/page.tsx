@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useContext } from 'react';
 import {
   Background,
   ReactFlow,
@@ -15,9 +15,8 @@ import {
   type Node,
   type Edge,
   type Connection,
-  type NodeMouseHandler,
   type OnSelectionChangeParams,
-  useKeyPress,
+  Controls,
 } from '@xyflow/react';
 
 import dagre from '@dagrejs/dagre';
@@ -25,9 +24,10 @@ import dagre from '@dagrejs/dagre';
 import '@xyflow/react/dist/style.css';
 import { initialNodes, initialEdges } from './initialElements';
 import { MiddleNode } from './middleNode';
+import { KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { MindMapProvider, MindMapContext } from './provider';
 
 const dagreGraph = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
-
 
 const getLayoutedElements = (
   nodes: Node[], edges: Edge[], direction = 'LR', getNodeData: (id: string) => Node | undefined, currentNodeId: string): { nodes: Node[], edges: Edge[] } => {
@@ -97,7 +97,7 @@ const Flow = () => {
         ...node, type: node.type
       }))]);
       setEdges([...layoutedEdges.map(edge => ({
-        ...edge, type: edge.type || 'bezier' // Ensure type is always defined
+        ...edge, type: edge.type || 'default' // Ensure type is always defined
       }))]);
     },
     [nodes, edges, getNode, currentNodeId, setNodes, setEdges],
@@ -130,15 +130,13 @@ const Flow = () => {
       id: crypto.randomUUID(),
       source: sourceNodeId,
       target: i,
-      type: 'bezier',
+      type: 'default',
+      dragHandle: '.drag-handle__custom',
     }
     const { nodes: layoutedNodes, edges: layoutedEdges } =
       getLayoutedElements([newNode, ...nodes.map(node => ({ ...node, selected: false }))], [...edges, newEdge], 'LR', getNode, currentNodeId);
     setNodes([...layoutedNodes.map(node => ({ ...node, type: node.type }))] as Node[]);
-    setEdges([...layoutedEdges.map(edge => ({
-      ...edge,
-      type: edge.type || 'bezier' // Ensure type is always defined
-    }))]);
+    setEdges([...layoutedEdges.map(edge => ({ ...edge, type: edge.type || 'default' }))]);
   }
   useEffect(() => {
     setTimeout(() => {
@@ -150,15 +148,15 @@ const Flow = () => {
 
   const handleSelectionChange = (params: OnSelectionChangeParams) => setSelectedNodes(params.nodes);
 
-  const handleKeyDown = (event: KeyboardEvent) => {
-    console.log(event.key);
-    if (event.key === 'Tab') {
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!isEditing && event.key === 'Tab') {
       handleAddNode(selectedNodes, "series");
     }
-    if (event.key === 'Enter') {
+    if (!isEditing && event.key === 'Enter') {
       handleAddNode(selectedNodes, "parallell");
     }
   }
+  const { isEditing } = useContext(MindMapContext);
 
   return (
     <div style={{ height: '100vh', width: '100vw' }}>
@@ -172,18 +170,21 @@ const Flow = () => {
         onConnect={onConnect}
         nodeTypes={{ middleNode: MiddleNode }}
         connectionLineType={ConnectionLineType.SmoothStep}
-
+        nodesDraggable={!isEditing}
+        panOnDrag={!isEditing}
         fitView={true}
         style={{ backgroundColor: "#F7F9FB" }}
       >
         <Panel position="top-right">
           <div className='flex gap-2'>
+            <div className='bg-blue-500 text-white p-2 rounded-md'>{isEditing ? "editing" : "viewing"}</div>
             <button className='bg-blue-500 text-white p-2 rounded-md' onClick={() => onLayout('TB')}>vertical layout</button>
             <button className='bg-blue-500 text-white p-2 rounded-md' onClick={() => onLayout('LR')}>horizontal layout</button>
             <button className='bg-blue-500 text-white p-2 rounded-md' onClick={() => handleAddNode(selectedNodes)}>ADD</button>
           </div>
         </Panel>
         <Background />
+        <Controls />
       </ReactFlow>
     </div>
   );
@@ -192,7 +193,9 @@ const Flow = () => {
 export default function Page() {
   return (
     <ReactFlowProvider>
-      <Flow />
+      <MindMapProvider>
+        <Flow />
+      </MindMapProvider>
     </ReactFlowProvider>
   );
 }
