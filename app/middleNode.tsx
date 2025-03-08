@@ -22,7 +22,18 @@ export const MiddleNode = ({ ...props }) => {
         <>
             <NodeToolbar isVisible={props.selected} position={Position.Top}>
                 <div className="p-1 flex gap-1 rounded-md bg-card shadow-md border">
+                    <button onClick={toggleEdit} className="rounded-md hover:bg-accent hover:text-accent-foreground hover:cursor-pointer p-2">+</button>
+                </div>
+            </NodeToolbar>
+            <NodeToolbar isVisible={props.selected} position={Position.Bottom}>
+                <div className="p-1 flex gap-1 rounded-md bg-card shadow-md border">
+                    <button onClick={toggleEdit} className="rounded-md hover:bg-accent hover:text-accent-foreground hover:cursor-pointer p-2">+</button>
+                </div>
+            </NodeToolbar>
+            <NodeToolbar isVisible={props.selected} position={Position.Right}>
+                <div className="p-1 flex gap-1 rounded-md bg-card shadow-md border">
                     <button onClick={toggleEdit} className="rounded-md hover:bg-accent hover:text-accent-foreground hover:cursor-pointer p-2">Edit</button>
+                    <button onClick={toggleEdit} className="rounded-md hover:bg-accent hover:text-accent-foreground hover:cursor-pointer p-2">Plus</button>
                 </div>
             </NodeToolbar>
             <div
@@ -40,15 +51,11 @@ export const MiddleNode = ({ ...props }) => {
                                 if (e.key === 'Escape') {
                                     toggleEdit()
                                 }
-                                if (e.key === 'Enter' && !e.shiftKey) {
-                                    e.preventDefault();
-                                    toggleEdit();
-                                }
                             }}
                         />
                     ) : (
-                        <div 
-                            onMouseDown={e => e.preventDefault()} 
+                        <div
+                            onMouseDown={e => e.preventDefault()}
                             className="w-full whitespace-pre-wrap"
                         >
                             {props.data.label}

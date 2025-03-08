@@ -19,63 +19,87 @@ import {
   Controls,
 } from '@xyflow/react';
 
-import dagre from '@dagrejs/dagre';
-
+import ELK from 'elkjs/lib/elk.bundled.js';
 import '@xyflow/react/dist/style.css';
 import { initialNodes, initialEdges } from './initialElements';
 import { MiddleNode } from './middleNode';
 import { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { MindMapProvider, MindMapContext } from './provider';
+import { orderBy } from 'lodash';
 
-const dagreGraph = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
+const elk = new ELK();
 
-const getLayoutedElements = (
-  nodes: Node[], edges: Edge[], direction = 'LR', getNodeData: (id: string) => Node | undefined, currentNodeId: string): { nodes: Node[], edges: Edge[] } => {
+const getLayoutedElements = async (
+  nodes: Node[],
+  edges: Edge[],
+  direction = 'LR',
+  getNodeData: (id: string) => Node | undefined,
+  currentNodeId: string
+): Promise<{ nodes: Node[]; edges: Edge[] }> => {
+
   const isHorizontal = direction === 'LR';
-  dagreGraph.setGraph({ rankdir: direction, nodesep: 50, edgesep: 50 });
 
-  nodes.forEach((node: Node) => {
-    const nodeData = getNodeData(node.id);
-    const nodeWidth = nodeData?.measured?.width || 172;
-    const nodeHeight = nodeData?.measured?.height || 36;
-    dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
-  });
+  // ELKグラフの設定
+  const elkGraph = {
+    id: 'root',
+    layoutOptions: {
+      'elk.algorithm': 'layered',
+      'elk.direction': isHorizontal ? 'RIGHT' : 'DOWN',
+      'elk.spacing.nodeNode': '50',
+      'elk.layered.spacing.nodeNodeBetweenLayers': '100',
+      'elk.layered.considerModelOrder': 'true',
+      'elk.layered.crossingMinimization.strategy': 'INTERACTIVE',
+      'elk.layered.nodePlacement.strategy': 'INTERACTIVE',
+    },
+    children: nodes.map(node => {
+      const nodeData = getNodeData(node.id);
 
-  edges.forEach((edge) => {
-    dagreGraph.setEdge(edge.source, edge.target);
-  });
+      return {
+        id: node.id,
+        width: nodeData?.measured?.width || 172,
+        height: nodeData?.measured?.height || 36,
+      };
+    }),
 
-  dagre.layout(dagreGraph);
+    edges: edges.map(edge => ({
+      id: edge.id,
+      sources: [edge.source],
+      targets: [edge.target]
+    }))
+  };
 
-  const newNodes = nodes.map((node) => {
-    const nodeWithPosition = dagreGraph.node(node.id);
-    const nodeData = getNodeData(node.id);
-    const nodeWidth = nodeData?.width || 172;
-    const nodeHeight = nodeData?.height || 36;
-    const newNode = {
-      ...node,
-      targetPosition: isHorizontal ? 'left' : 'top',
-      sourcePosition: isHorizontal ? 'right' : 'bottom',
-      // We are shifting the dagre node position (anchor=center center) to the top left
-      // so it matches the React Flow node anchor point (top left).
-      position: {
-        x: nodeWithPosition.x - nodeWidth / 2,
-        y: nodeWithPosition.y - nodeHeight / 2,
-      },
-    };
+  // レイアウトの計算
+  const layout = await elk.layout(elkGraph);
 
-    return newNode;
+  // 計算結果を適用
+  const newNodes = nodes.map(node => {
+    const elkNode = layout.children?.find(n => n.id === node.id);
+    if (elkNode) {
+      return {
+        ...node,
+        targetPosition: isHorizontal ? 'left' : 'top',
+        sourcePosition: isHorizontal ? 'right' : 'bottom',
+        position: {
+          x: elkNode.x || 0,
+          y: elkNode.y || 0
+        }
+      };
+    }
+    return node;
   });
 
   return { nodes: newNodes, edges };
 };
-
 
 const Flow = () => {
   const { getNode } = useReactFlow();
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  useEffect(() => {
+    const sortedNodes = orderBy(initialNodes, [(node: Node) => node.data?.rank || 0], ['asc']);
+    setNodes(sortedNodes);
+  }, [initialNodes, setNodes]);
   const [currentNodeId, setCurrentNodeId] = useState("2");
   const [selectedNodes, setSelectedNodes] = useState<Node[]>([]);
   const updateNodeInternals = useUpdateNodeInternals();
@@ -90,20 +114,27 @@ const Flow = () => {
     [],
   );
   const onLayout = useCallback(
-    (direction: string) => {
-      const { nodes: layoutedNodes, edges: layoutedEdges } =
-        getLayoutedElements(nodes, edges, direction, getNode, currentNodeId);
+    async (direction: string) => {
+      const { nodes: layoutedNodes, edges: layoutedEdges } = await getLayoutedElements(
+        nodes,
+        edges,
+        direction,
+        getNode,
+        currentNodeId
+      );
       setNodes([...layoutedNodes.map(node => ({
-        ...node, type: node.type
+        ...node,
+        type: node.type
       }))]);
       setEdges([...layoutedEdges.map(edge => ({
-        ...edge, type: edge.type || 'default' // Ensure type is always defined
+        ...edge,
+        type: edge.type || 'default'
       }))]);
     },
-    [nodes, edges, getNode, currentNodeId, setNodes, setEdges],
+    [nodes, edges, getNode, currentNodeId, setNodes, setEdges]
   );
 
-  const handleAddNode = (selectedNodes: Node[], direction: "parallell" | "series") => {
+  const handleAddNode = async (selectedNodes: Node[], direction: "parallell" | "series") => {
     const i = crypto.randomUUID();
     const newNode = {
       id: i,
@@ -131,18 +162,26 @@ const Flow = () => {
       source: sourceNodeId,
       target: i,
       type: 'default',
-      dragHandle: '.drag-handle__custom',
     }
-    const { nodes: layoutedNodes, edges: layoutedEdges } =
-      getLayoutedElements([newNode, ...nodes.map(node => ({ ...node, selected: false }))], [...edges, newEdge], 'LR', getNode, currentNodeId);
-    setNodes([...layoutedNodes.map(node => ({ ...node, type: node.type }))] as Node[]);
+    const { nodes: layoutedNodes, edges: layoutedEdges } = await getLayoutedElements(
+      [newNode, ...nodes.map(node => ({ ...node, selected: false }))],
+      [...edges, newEdge],
+      'LR',
+      getNode,
+      currentNodeId
+    );
+    setNodes([...layoutedNodes.map(node => ({ ...node, type: node.type }))]);
     setEdges([...layoutedEdges.map(edge => ({ ...edge, type: edge.type || 'default' }))]);
   }
   useEffect(() => {
-    setTimeout(() => {
+    const initLayout = async () => {
       nodes.forEach((node) => updateNodeInternals(node.id));
-      const { nodes: layoutedNodes } = getLayoutedElements(nodes, edges, "LR", getNode, currentNodeId);
+      const { nodes: layoutedNodes } = await getLayoutedElements(nodes, edges, "LR", getNode, currentNodeId);
       setNodes(layoutedNodes);
+    };
+
+    setTimeout(() => {
+      initLayout();
     }, 50);
   }, []);
 
@@ -180,7 +219,12 @@ const Flow = () => {
             <div className='bg-blue-500 text-white p-2 rounded-md'>{isEditing ? "editing" : "viewing"}</div>
             <button className='bg-blue-500 text-white p-2 rounded-md' onClick={() => onLayout('TB')}>vertical layout</button>
             <button className='bg-blue-500 text-white p-2 rounded-md' onClick={() => onLayout('LR')}>horizontal layout</button>
-            <button className='bg-blue-500 text-white p-2 rounded-md' onClick={() => handleAddNode(selectedNodes)}>ADD</button>
+            <button
+              className='bg-blue-500 text-white p-2 rounded-md'
+              onClick={() => handleAddNode(selectedNodes, "series")}
+            >
+              ADD
+            </button>
           </div>
         </Panel>
         <Background />
