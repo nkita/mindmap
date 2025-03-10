@@ -1,148 +1,54 @@
 'use client';
 
-import React, { useCallback, useEffect, useState, useContext } from 'react';
+import React, { useCallback, useState, useContext } from 'react';
 import {
   Background,
   ReactFlow,
-  addEdge,
-  ConnectionLineType,
   Panel,
   useNodesState,
   useEdgesState,
   useReactFlow,
   ReactFlowProvider,
-  useUpdateNodeInternals,
   type Node,
   type Edge,
-  type Connection,
   type OnSelectionChangeParams,
   Controls,
 } from '@xyflow/react';
 
-import ELK from 'elkjs/lib/elk.bundled.js';
 import '@xyflow/react/dist/style.css';
-import { initialNodes, initialEdges } from './initialElements';
+import { initialNodes } from './initialElements';
 import { MiddleNode } from './middleNode';
 import { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { MindMapProvider, MindMapContext } from './provider';
-import { orderBy } from 'lodash';
-
-const elk = new ELK();
-
-const getLayoutedElements = async (
-  nodes: Node[],
-  edges: Edge[],
-  direction = 'LR',
-  getNodeData: (id: string) => Node | undefined,
-  currentNodeId: string
-): Promise<{ nodes: Node[]; edges: Edge[] }> => {
-
-  const isHorizontal = direction === 'LR';
-
-  // ELKグラフの設定
-  const elkGraph = {
-    id: 'root',
-    layoutOptions: {
-      'elk.algorithm': 'layered',
-      'elk.direction': isHorizontal ? 'RIGHT' : 'DOWN',
-      'elk.spacing.nodeNode': '50',
-      'elk.layered.spacing.nodeNodeBetweenLayers': '100',
-      'elk.layered.considerModelOrder': 'true',
-      'elk.layered.crossingMinimization.strategy': 'INTERACTIVE',
-      'elk.layered.nodePlacement.strategy': 'INTERACTIVE',
-    },
-    children: nodes.map(node => {
-      const nodeData = getNodeData(node.id);
-
-      return {
-        id: node.id,
-        width: nodeData?.measured?.width || 172,
-        height: nodeData?.measured?.height || 36,
-      };
-    }),
-
-    edges: edges.map(edge => ({
-      id: edge.id,
-      sources: [edge.source],
-      targets: [edge.target]
-    }))
-  };
-
-  // レイアウトの計算
-  const layout = await elk.layout(elkGraph);
-
-  // 計算結果を適用
-  const newNodes = nodes.map(node => {
-    const elkNode = layout.children?.find(n => n.id === node.id);
-    if (elkNode) {
-      return {
-        ...node,
-        targetPosition: isHorizontal ? 'left' : 'top',
-        sourcePosition: isHorizontal ? 'right' : 'bottom',
-        position: {
-          x: elkNode.x || 0,
-          y: elkNode.y || 0
-        }
-      };
-    }
-    return node;
-  });
-
-  return { nodes: newNodes, edges };
-};
+import { getLayoutedElements } from './lib';
 
 const Flow = () => {
   const { getNode } = useReactFlow();
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
-  useEffect(() => {
-    const sortedNodes = orderBy(initialNodes, [(node: Node) => node.data?.rank || 0], ['asc']);
-    setNodes(sortedNodes);
-  }, [initialNodes, setNodes]);
-  const [currentNodeId, setCurrentNodeId] = useState("2");
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedNodes, setSelectedNodes] = useState<Node[]>([]);
-  const updateNodeInternals = useUpdateNodeInternals();
-  const onConnect = useCallback(
-    (params: Connection) =>
-      setEdges((eds) =>
-        addEdge(
-          { ...params },
-          eds,
-        ),
-      ),
-    [],
-  );
+  const { isEditing } = useContext(MindMapContext);
+
   const onLayout = useCallback(
-    async (direction: string) => {
-      const { nodes: layoutedNodes, edges: layoutedEdges } = await getLayoutedElements(
+    (direction: string) => {
+      const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
         nodes,
-        edges,
         direction,
         getNode,
-        currentNodeId
       );
-      setNodes([...layoutedNodes.map(node => ({
-        ...node,
-        type: node.type
-      }))]);
-      setEdges([...layoutedEdges.map(edge => ({
-        ...edge,
-        type: edge.type || 'default'
-      }))]);
+      setNodes([...layoutedNodes]);
+      setEdges([...layoutedEdges]);
     },
-    [nodes, edges, getNode, currentNodeId, setNodes, setEdges]
+    [nodes, getNode, setNodes, setEdges]
   );
 
-  const handleAddNode = async (selectedNodes: Node[], direction: "parallell" | "series") => {
+  const handleAddNode = async (
+    selectedNodes: Node[],
+    direction: "parallell" | "series",
+    getNode: (id: string) => Node | undefined
+  ) => {
     const i = crypto.randomUUID();
-    const newNode = {
-      id: i,
-      type: 'middleNode',
-      data: { label: 'new data' },
-      position: { x: 0, y: 0 },
-      selected: true,
-    }
     let sourceNodeId = "root"
     if (selectedNodes.length === 1) {
       const i = selectedNodes[0].id;
@@ -157,45 +63,43 @@ const Flow = () => {
     } else {
       sourceNodeId = nodes[0].id;
     }
-    const newEdge = {
-      id: crypto.randomUUID(),
-      source: sourceNodeId,
-      target: i,
-      type: 'default',
+    const newNode = {
+      id: i,
+      type: 'middleNode',
+      data: { label: 'new data', parent: sourceNodeId, rank: 3 },
+      position: { x: 0, y: 0 },
+      selected: true,
     }
-    const { nodes: layoutedNodes, edges: layoutedEdges } = await getLayoutedElements(
+    const { nodes: newNodes, edges: newEdges } = getLayoutedElements(
       [newNode, ...nodes.map(node => ({ ...node, selected: false }))],
-      [...edges, newEdge],
       'LR',
-      getNode,
-      currentNodeId
+      getNode
     );
-    setNodes([...layoutedNodes.map(node => ({ ...node, type: node.type }))]);
-    setEdges([...layoutedEdges.map(edge => ({ ...edge, type: edge.type || 'default' }))]);
-  }
-  useEffect(() => {
-    const initLayout = async () => {
-      nodes.forEach((node) => updateNodeInternals(node.id));
-      const { nodes: layoutedNodes } = await getLayoutedElements(nodes, edges, "LR", getNode, currentNodeId);
-      setNodes(layoutedNodes);
-    };
+    setNodes([...newNodes]);
+    setEdges([...newEdges]);
+  };
 
-    setTimeout(() => {
-      initLayout();
-    }, 50);
-  }, []);
+  // useEffect(() => {
+  //   if (update) {
+  //     const timer = setTimeout(() => {
+  //       onLayout('LR');
+  //       setUpdate(false);
+  //     }, 50);
+
+  //     return () => clearTimeout(timer);
+  //   }
+  // }, [update, onLayout, isEditing]);
 
   const handleSelectionChange = (params: OnSelectionChangeParams) => setSelectedNodes(params.nodes);
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (!isEditing && event.key === 'Tab') {
-      handleAddNode(selectedNodes, "series");
+      handleAddNode(selectedNodes, "series", getNode);
     }
     if (!isEditing && event.key === 'Enter') {
-      handleAddNode(selectedNodes, "parallell");
+      handleAddNode(selectedNodes, "parallell", getNode);
     }
   }
-  const { isEditing } = useContext(MindMapContext);
 
   return (
     <div style={{ height: '100vh', width: '100vw' }}>
@@ -206,9 +110,7 @@ const Flow = () => {
         onSelectionChange={handleSelectionChange}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
         nodeTypes={{ middleNode: MiddleNode }}
-        connectionLineType={ConnectionLineType.SmoothStep}
         nodesDraggable={!isEditing}
         panOnDrag={!isEditing}
         fitView={true}
@@ -221,7 +123,7 @@ const Flow = () => {
             <button className='bg-blue-500 text-white p-2 rounded-md' onClick={() => onLayout('LR')}>horizontal layout</button>
             <button
               className='bg-blue-500 text-white p-2 rounded-md'
-              onClick={() => handleAddNode(selectedNodes, "series")}
+              onClick={() => handleAddNode(selectedNodes, "series", getNode)}
             >
               ADD
             </button>

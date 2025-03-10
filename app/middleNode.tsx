@@ -41,7 +41,7 @@ export const MiddleNode = ({ ...props }) => {
             >
                 <div className="relative flex items-center text-xs">
                     {isEditing ? (
-                        <textarea
+                        <input
                             value={label}
                             onChange={(e) => setLabel(e.target.value)}
                             className="bg-transparent outline-none w-full resize-none overflow-wrap-break-word"
@@ -62,8 +62,8 @@ export const MiddleNode = ({ ...props }) => {
                         </div>
                     )}
                 </div>
-                <Handle type="target" position={Position.Left} />
-                <Handle type="source" position={Position.Right} />
+                <Handle type="target" position={Position.Top} />
+                <Handle type="source" position={Position.Bottom} />
             </div >
         </>
     );
