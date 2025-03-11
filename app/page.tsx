@@ -20,7 +20,8 @@ import { initialNodes } from './initialElements';
 import { MiddleNode } from './middleNode';
 import { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { MindMapProvider, MindMapContext } from './provider';
-import { getLayoutedElements } from './lib';
+import { getLayoutedElements, sortNodesByRank, traverseHierarchy } from './helper-dagre-layout';
+import { determineSourceAndRank, recalculateRanks } from './helper-node-sort';
 
 const Flow = () => {
   const { getNode } = useReactFlow();
@@ -43,41 +44,44 @@ const Flow = () => {
     [nodes, getNode, setNodes, setEdges]
   );
 
-  const handleAddNode = async (
-    selectedNodes: Node[],
-    direction: "parallell" | "series",
-    getNode: (id: string) => Node | undefined
-  ) => {
-    const i = crypto.randomUUID();
-    let sourceNodeId = "root"
-    if (selectedNodes.length === 1) {
-      const i = selectedNodes[0].id;
-      if (direction === "series") {
-        sourceNodeId = i
-      } else if (direction === "parallell") {
-        const edge = edges.find(edge => edge.target === i);
-        sourceNodeId = edge?.source ?? i;
-      }
-    } else if (selectedNodes.length > 1) {
-      sourceNodeId = nodes[0].id;
-    } else {
-      sourceNodeId = nodes[0].id;
-    }
-    const newNode = {
-      id: i,
-      type: 'middleNode',
-      data: { label: 'new data', parent: sourceNodeId, rank: 3 },
-      position: { x: 0, y: 0 },
-      selected: true,
-    }
-    const { nodes: newNodes, edges: newEdges } = getLayoutedElements(
-      [newNode, ...nodes.map(node => ({ ...node, selected: false }))],
-      'LR',
-      getNode
-    );
-    setNodes([...newNodes]);
-    setEdges([...newEdges]);
-  };
+  const handleAddNode = useCallback(
+    (selectedNodes: Node[], direction: "parallel" | "series") => {
+      const newNodeId = crypto.randomUUID();
+
+      // ソースノードとランクの決定
+      const { sourceNodeId, newRank } = determineSourceAndRank(selectedNodes, direction, nodes, edges);
+
+      const newNode = {
+        id: newNodeId,
+        type: 'middleNode',
+        data: { label: 'new data', parent: sourceNodeId, rank: newRank },
+        position: { x: 0, y: 0 },
+        selected: true,
+      };
+
+      // 既存ノードの選択状態をリセットして新ノードを追加
+      const updatedNodes = [newNode, ...nodes.map(node => ({ ...node, selected: false }))];
+      const rootNode = nodes.find(node => node.id === "root");
+      
+      // 階層構造を走査してノードをソート
+      const traversedNodes = traverseHierarchy(updatedNodes, "root", sortNodesByRank);
+      
+      // 同一親ノード内でのランク再計算
+      const sortedNodes = recalculateRanks(traversedNodes);
+
+      // レイアウト計算と状態更新
+      const { nodes: newNodes, edges: newEdges } = getLayoutedElements(
+        rootNode ? [rootNode, ...sortedNodes] : sortedNodes,
+        'LR',
+        getNode
+      );
+
+      setNodes([...newNodes]);
+      setEdges([...newEdges]);
+    },
+    [nodes, edges, getNode, setNodes, setEdges]
+  );
+
 
   // useEffect(() => {
   //   if (update) {
@@ -94,10 +98,10 @@ const Flow = () => {
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (!isEditing && event.key === 'Tab') {
-      handleAddNode(selectedNodes, "series", getNode);
+      handleAddNode(selectedNodes, "series");
     }
     if (!isEditing && event.key === 'Enter') {
-      handleAddNode(selectedNodes, "parallell", getNode);
+      handleAddNode(selectedNodes, "parallel");
     }
   }
 
@@ -123,7 +127,7 @@ const Flow = () => {
             <button className='bg-blue-500 text-white p-2 rounded-md' onClick={() => onLayout('LR')}>horizontal layout</button>
             <button
               className='bg-blue-500 text-white p-2 rounded-md'
-              onClick={() => handleAddNode(selectedNodes, "series", getNode)}
+              onClick={() => handleAddNode(selectedNodes, "series")}
             >
               ADD
             </button>

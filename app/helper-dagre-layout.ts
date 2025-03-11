@@ -58,12 +58,12 @@ export const traverseHierarchy = <T>(
 };
 
 // ノードをランク順にソートする関数
- const sortNodesByRank = (nodes: Node[]): Node[] => {
+export const sortNodesByRank = (nodes: Node[]): Node[] => {
     return orderBy(nodes, [(node: Node) => node.data?.rank || 0], ['asc']);
 };
 
 // 親子関係に基づいてエッジを生成する関数
- const createHierarchyEdges = (nodes: Node[], parentId: string | null): Edge[] => {
+export const createHierarchyEdges = (nodes: Node[], parentId: string | null): Edge[] => {
     if (parentId === null) return [];
     return nodes.map(node => ({
         id: `${parentId}-${node.id}`,
@@ -74,7 +74,7 @@ export const traverseHierarchy = <T>(
 };
 
 // ノードとエッジの階層構造を準備する関数
- const prepareHierarchicalElements = (nodes: Node[]): { sortedNodes: Node[]; hierarchyEdges: Edge[] } => {
+const prepareHierarchicalElements = (nodes: Node[]): { sortedNodes: Node[]; hierarchyEdges: Edge[] } => {
     const rootNode = nodes.find(node => node.id === "root");
     if (!rootNode) return { sortedNodes: [], hierarchyEdges: [] };
 
@@ -87,7 +87,7 @@ export const traverseHierarchy = <T>(
 };
 
 // Dagreグラフを初期化する関数
- const initializeDagreGraph = (direction = 'LR'): dagre.graphlib.Graph => {
+const initializeDagreGraph = (direction = 'LR'): dagre.graphlib.Graph => {
     const dagreGraph = new dagre.graphlib.Graph();
     dagreGraph.setDefaultEdgeLabel(() => ({}));
     dagreGraph.setGraph({ rankdir: direction });
@@ -95,7 +95,7 @@ export const traverseHierarchy = <T>(
 };
 
 // Dagreグラフにノードを追加する関数
- const addNodesToDagreGraph = (
+const addNodesToDagreGraph = (
     graph: dagre.graphlib.Graph,
     nodes: Node[],
     getNodeData: (id: string) => Node | undefined
@@ -110,7 +110,7 @@ export const traverseHierarchy = <T>(
 };
 
 // Dagreグラフにエッジを追加する関数
- const addEdgesToDagreGraph = (
+const addEdgesToDagreGraph = (
     graph: dagre.graphlib.Graph,
     edges: Edge[]
 ): void => {
@@ -120,7 +120,7 @@ export const traverseHierarchy = <T>(
 };
 
 // 位置情報を持つノードを生成する関数
- const createPositionedNodes = (
+const createPositionedNodes = (
     nodes: Node[],
     graph: dagre.graphlib.Graph,
     isHorizontal: boolean
