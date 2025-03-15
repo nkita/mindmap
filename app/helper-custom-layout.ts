@@ -1,5 +1,7 @@
 import { type Edge, type Node } from "@xyflow/react";
 import { prepareHierarchicalElements } from './helper-node-sort';
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-expect-error
 import * as MindmapLayouts from 'mindmap-layouts';
 // MindmapLayoutsライブラリを使用したレイアウト関数
 export const getLayoutedElements = (
