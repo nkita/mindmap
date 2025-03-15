@@ -2,15 +2,8 @@ import {
     type Node,
     type Edge,
 } from '@xyflow/react';
-import { orderBy } from 'lodash';
 import dagre from 'dagre';
-
-// 型ガード関数
-const isNode = (item: unknown): item is Node =>
-    item instanceof Object && 'id' in item;
-
-const isEdge = (item: unknown): item is Edge =>
-    item instanceof Object && 'source' in item;
+import { prepareHierarchicalElements } from './helper-node-sort';
 
 // メイン関数: レイアウト済みの要素を取得
 export const getLayoutedElements = (
@@ -20,7 +13,6 @@ export const getLayoutedElements = (
 ): { nodes: Node[]; edges: Edge[] } => {
     // 階層構造の準備
     const { sortedNodes, hierarchyEdges } = prepareHierarchicalElements(nodes);
-
     // 空の結果を早期に返す
     if (sortedNodes.length === 0) {
         return { nodes: [], edges: [] };
@@ -43,49 +35,6 @@ export const getLayoutedElements = (
     return { nodes: positionedNodes, edges: hierarchyEdges };
 };
 
-// 階層構造を再帰的に処理するユーティリティ関数
-export const traverseHierarchy = <T>(
-    nodes: Node[],
-    parentId: string | null,
-    processor: (nodes: Node[], parentId: string | null) => T[]
-): T[] => {
-    const childNodes = nodes.filter(node => node.data?.parent === parentId);
-    const currentLevel = processor(childNodes, parentId);
-    const childResults = childNodes.flatMap(node =>
-        traverseHierarchy(nodes, node.id, processor)
-    );
-    return [...currentLevel, ...childResults];
-};
-
-// ノードをランク順にソートする関数
-export const sortNodesByRank = (nodes: Node[]): Node[] => {
-    return orderBy(nodes, [(node: Node) => node.data?.rank || 0], ['asc']);
-};
-
-// 親子関係に基づいてエッジを生成する関数
-export const createHierarchyEdges = (nodes: Node[], parentId: string | null): Edge[] => {
-    if (parentId === null) return [];
-    return nodes.map(node => ({
-        id: `${parentId}-${node.id}`,
-        source: parentId,
-        target: node.id,
-        type: 'default',
-    }));
-};
-
-// ノードとエッジの階層構造を準備する関数
-const prepareHierarchicalElements = (nodes: Node[]): { sortedNodes: Node[]; hierarchyEdges: Edge[] } => {
-    const rootNode = nodes.find(node => node.id === "root");
-    if (!rootNode) return { sortedNodes: [], hierarchyEdges: [] };
-
-    const nodeResults = traverseHierarchy(nodes, "root", sortNodesByRank);
-    const sortedNodes = [rootNode, ...nodeResults.filter(isNode)];
-    const edgeResults = traverseHierarchy(sortedNodes, 'root', createHierarchyEdges);
-    const hierarchyEdges = edgeResults.filter(isEdge);
-
-    return { sortedNodes, hierarchyEdges };
-};
-
 // Dagreグラフを初期化する関数
 const initializeDagreGraph = (direction = 'LR'): dagre.graphlib.Graph => {
     const dagreGraph = new dagre.graphlib.Graph();
@@ -102,9 +51,12 @@ const addNodesToDagreGraph = (
 ): void => {
     nodes.forEach((node) => {
         const nodeData = getNodeData(node.id);
+        // 実際のノードサイズを使用し、余裕を持たせる
+        const width = (nodeData?.measured?.width || 172) + 20; // 余白を追加
+        const height = (nodeData?.measured?.height || 36) + 10; // 余白を追加
         graph.setNode(node.id, {
-            width: nodeData?.measured?.width || 172,
-            height: nodeData?.measured?.height || 36,
+            width: width,
+            height: height,
         });
     });
 };
@@ -132,9 +84,13 @@ const createPositionedNodes = (
             targetPosition: isHorizontal ? 'left' : 'top',
             sourcePosition: isHorizontal ? 'right' : 'bottom',
             position: {
-                x: nodeWithPosition.x - nodeWithPosition.width / 2,
-                y: nodeWithPosition.y - nodeWithPosition.height / 2,
+                // // 水平方向の場合は、幅の半分を考慮して調整
+                // x: isHorizontal ? nodeWithPosition.x - nodeWithPosition.width / 4 : nodeWithPosition.x,
+                // y: nodeWithPosition.y - nodeWithPosition.height / 2,
+                x: nodeWithPosition.x,
+                y: nodeWithPosition.y,
             },
         } as Node;
     });
 };
+

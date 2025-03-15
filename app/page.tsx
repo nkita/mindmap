@@ -8,11 +8,13 @@ import {
   useNodesState,
   useEdgesState,
   useReactFlow,
-  ReactFlowProvider,
   type Node,
   type Edge,
   type OnSelectionChangeParams,
   Controls,
+  applyNodeChanges,
+  ReactFlowProvider,
+  NodeChange,
 } from '@xyflow/react';
 
 import '@xyflow/react/dist/style.css';
@@ -20,13 +22,14 @@ import { initialNodes } from './initialElements';
 import { MiddleNode } from './middleNode';
 import { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { MindMapProvider, MindMapContext } from './provider';
-import { getLayoutedElements, sortNodesByRank, traverseHierarchy } from './helper-dagre-layout';
-import { determineSourceAndRank, recalculateRanks } from './helper-node-sort';
+// import { getLayoutedElements } from './helper-dagre-layout';
+import { getLayoutedElements } from './helper-custom-layout';
+import { determineSourceAndRank, recalculateRanks, sortNodesByRank, traverseHierarchy } from './helper-node-sort';
 
 const Flow = () => {
   const { getNode } = useReactFlow();
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [nodes, setNodes] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedNodes, setSelectedNodes] = useState<Node[]>([]);
   const { isEditing } = useContext(MindMapContext);
@@ -44,10 +47,38 @@ const Flow = () => {
     [nodes, getNode, setNodes, setEdges]
   );
 
-  const handleAddNode = useCallback(
+  const onNodesChangeWithAutoLayout = useCallback((changes: NodeChange[]) => {
+    if (changes.length === 1) {
+      const change = changes[0];
+      if (change.type === "add") {
+        const newNodes = applyNodeChanges(changes, nodes.map(node => ({ ...node, selected: false })));
+        const rootNode = newNodes.find(node => node.id === "root");
+        // 階層構造を走査してノードをソート
+        const traversedNodes = traverseHierarchy(newNodes, "root", sortNodesByRank);
+        // 同一親ノード内でのランク再計算
+        const sortedNodes = recalculateRanks(traversedNodes);
+        // レイアウト計算と状態更新
+        const { nodes: _nodes, edges: _edges } = getLayoutedElements(rootNode ? [rootNode, ...sortedNodes] : sortedNodes, 'LR', getNode
+        );
+        setNodes(_nodes)
+        setEdges(_edges)
+      } else if (change.type === "dimensions") {
+        const updatedNodes = applyNodeChanges(changes, nodes);
+        const { nodes: _nodes, edges: _edges } = getLayoutedElements(updatedNodes, 'LR', getNode);
+        setNodes(_nodes)
+        setEdges(_edges)
+      } else {
+        setNodes((prev) => applyNodeChanges(changes, prev))
+      }
+    } else {
+      setNodes((prev) => applyNodeChanges(changes, prev))
+    }
+  }, [setNodes, getNode, setEdges, nodes]);
+
+
+  const handleAddNode =
     (selectedNodes: Node[], direction: "parallel" | "series") => {
       const newNodeId = crypto.randomUUID();
-
       // ソースノードとランクの決定
       const { sourceNodeId, newRank } = determineSourceAndRank(selectedNodes, direction, nodes, edges);
 
@@ -58,14 +89,12 @@ const Flow = () => {
         position: { x: 0, y: 0 },
         selected: true,
       };
-
-      // 既存ノードの選択状態をリセットして新ノードを追加
       const updatedNodes = [newNode, ...nodes.map(node => ({ ...node, selected: false }))];
       const rootNode = nodes.find(node => node.id === "root");
-      
+
       // 階層構造を走査してノードをソート
       const traversedNodes = traverseHierarchy(updatedNodes, "root", sortNodesByRank);
-      
+
       // 同一親ノード内でのランク再計算
       const sortedNodes = recalculateRanks(traversedNodes);
 
@@ -78,21 +107,16 @@ const Flow = () => {
 
       setNodes([...newNodes]);
       setEdges([...newEdges]);
-    },
-    [nodes, edges, getNode, setNodes, setEdges]
-  );
+    }
 
 
   // useEffect(() => {
-  //   if (update) {
-  //     const timer = setTimeout(() => {
-  //       onLayout('LR');
-  //       setUpdate(false);
-  //     }, 50);
+  //   const timer = setTimeout(() => {
+  //     onLayout('LR');
+  //   }, 50);
 
-  //     return () => clearTimeout(timer);
-  //   }
-  // }, [update, onLayout, isEditing]);
+  //   return () => clearTimeout(timer);
+  // }, []);
 
   const handleSelectionChange = (params: OnSelectionChangeParams) => setSelectedNodes(params.nodes);
 
@@ -112,7 +136,7 @@ const Flow = () => {
         edges={edges}
         onKeyDown={handleKeyDown}
         onSelectionChange={handleSelectionChange}
-        onNodesChange={onNodesChange}
+        onNodesChange={onNodesChangeWithAutoLayout}
         onEdgesChange={onEdgesChange}
         nodeTypes={{ middleNode: MiddleNode }}
         nodesDraggable={!isEditing}

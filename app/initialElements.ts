@@ -1,38 +1,37 @@
 import { Node } from '@xyflow/react';
 const position = { x: 0, y: 0 };
-const edgeType = 'default';
 
 export const initialNodes: Node[] = [
   {
     id: 'root',
     type: 'middleNode',
-    data: { label: 'Root', parent: '', rank: 0 },
+    data: { label: 'Root', parent: '', rank: 1 },
     position,
   },
   {
     id: 'root-1',
     type: 'middleNode',
-    data: { label: 'id node 1 long text', parent: 'root', rank: 0 },
+    data: { label: 'id node 1 long text', parent: 'root', rank: 1 },
     expandParent: false,
     position,
   },
   {
     id: 'root-3',
     type: 'middleNode',
-    data: { label: 'id node 3', parent: 'root', rank: 2 },
+    data: { label: 'id node 3', parent: 'root', rank: 3 },
     position,
   },
   {
     id: 'root-2',
     type: 'middleNode',
-    data: { label: 'id node 2', parent: 'root', rank: 1 },
+    data: { label: 'id node 2', parent: 'root', rank: 2 },
     position,
   },
-  { id: 'root-2-7', type: 'middleNode', data: { label: ' id 7 node output', parent: 'root-2', rank: 1 }, position },
+  { id: 'root-2-7', type: 'middleNode', data: { label: ' id 7 node output', parent: 'root-2', rank: 2 }, position },
   {
     id: 'root-2-6',
     type: 'middleNode',
-    data: { label: 'id node 6', parent: 'root-2', rank: 0 },
+    data: { label: 'id node 6', parent: 'root-2', rank: 1 },
     position,
   },
 ];
