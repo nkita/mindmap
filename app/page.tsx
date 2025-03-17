@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useState, useContext } from 'react';
+import React, { useCallback, useContext, KeyboardEvent, useState, useEffect } from 'react';
 import {
   Background,
   ReactFlow,
@@ -10,19 +10,17 @@ import {
   useReactFlow,
   type Node,
   type Edge,
-  type OnSelectionChangeParams,
   Controls,
   applyNodeChanges,
   ReactFlowProvider,
   NodeChange,
+  OnSelectionChangeParams,
 } from '@xyflow/react';
 
 import '@xyflow/react/dist/style.css';
 import { initialNodes } from './initialElements';
 import { MiddleNode } from './middleNode';
-import { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { MindMapProvider, MindMapContext } from './provider';
-// import { getLayoutedElements } from './helper-dagre-layout';
 import { getLayoutedElements } from './helper-custom-layout';
 import { determineSourceAndRank, recalculateRanks, sortNodesByRank, traverseHierarchy } from './helper-node-sort';
 
@@ -47,6 +45,7 @@ const Flow = () => {
     [nodes, getNode, setNodes, setEdges]
   );
 
+  const [update, setUpdate] = useState(false);
   const onNodesChangeWithAutoLayout = useCallback((changes: NodeChange[]) => {
     if (changes.length === 1) {
       const change = changes[0];
@@ -58,8 +57,7 @@ const Flow = () => {
         // 同一親ノード内でのランク再計算
         const sortedNodes = recalculateRanks(traversedNodes);
         // レイアウト計算と状態更新
-        const { nodes: _nodes, edges: _edges } = getLayoutedElements(rootNode ? [rootNode, ...sortedNodes] : sortedNodes, 'LR', getNode
-        );
+        const { nodes: _nodes, edges: _edges } = getLayoutedElements(rootNode ? [rootNode, ...sortedNodes] : sortedNodes, 'LR', getNode);
         setNodes(_nodes)
         setEdges(_edges)
       } else if (change.type === "dimensions") {
@@ -67,14 +65,22 @@ const Flow = () => {
         const { nodes: _nodes, edges: _edges } = getLayoutedElements(updatedNodes, 'LR', getNode);
         setNodes(_nodes)
         setEdges(_edges)
+        setUpdate(true)
       } else {
         setNodes((prev) => applyNodeChanges(changes, prev))
       }
     } else {
       setNodes((prev) => applyNodeChanges(changes, prev))
+      setUpdate(true)
     }
   }, [setNodes, getNode, setEdges, nodes]);
 
+  useEffect(() => {
+    if (update) {
+      onLayout('LR');
+      setUpdate(false);
+    }
+  }, [update, onLayout]);
 
   const handleAddNode =
     (selectedNodes: Node[], direction: "parallel" | "series") => {
@@ -110,17 +116,9 @@ const Flow = () => {
     }
 
 
-  // useEffect(() => {
-  //   const timer = setTimeout(() => {
-  //     onLayout('LR');
-  //   }, 50);
-
-  //   return () => clearTimeout(timer);
-  // }, []);
-
   const handleSelectionChange = (params: OnSelectionChangeParams) => setSelectedNodes(params.nodes);
 
-  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (!isEditing && event.key === 'Tab') {
       handleAddNode(selectedNodes, "series");
     }
@@ -134,14 +132,17 @@ const Flow = () => {
       <ReactFlow
         nodes={nodes}
         edges={edges}
-        onKeyDown={handleKeyDown}
-        onSelectionChange={handleSelectionChange}
         onNodesChange={onNodesChangeWithAutoLayout}
         onEdgesChange={onEdgesChange}
-        nodeTypes={{ middleNode: MiddleNode }}
+        onSelectionChange={handleSelectionChange}
+        onKeyDown={handleKeyDown}
+        nodeTypes={{ middleNode: MiddleNode, lastNode: MiddleNode }}
         nodesDraggable={!isEditing}
+        nodeDragThreshold={0}
         panOnDrag={!isEditing}
         fitView={true}
+        selectionKeyCode={null}
+        multiSelectionKeyCode={null}
         style={{ backgroundColor: "#F7F9FB" }}
       >
         <Panel position="top-right">
@@ -149,12 +150,6 @@ const Flow = () => {
             <div className='bg-blue-500 text-white p-2 rounded-md'>{isEditing ? "editing" : "viewing"}</div>
             <button className='bg-blue-500 text-white p-2 rounded-md' onClick={() => onLayout('TB')}>vertical layout</button>
             <button className='bg-blue-500 text-white p-2 rounded-md' onClick={() => onLayout('LR')}>horizontal layout</button>
-            <button
-              className='bg-blue-500 text-white p-2 rounded-md'
-              onClick={() => handleAddNode(selectedNodes, "series")}
-            >
-              ADD
-            </button>
           </div>
         </Panel>
         <Background />

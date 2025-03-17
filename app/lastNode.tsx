@@ -1,26 +1,26 @@
-import { Position, Handle, NodeToolbar, useReactFlow, useOnSelectionChange, useKeyPress, OnSelectionChangeParams, Edge, Node } from "@xyflow/react";
-import { useState, useContext, useCallback, useEffect } from "react";
+import { Position, Handle, NodeToolbar, useReactFlow } from "@xyflow/react";
+import { useState, useContext } from "react";
 import { MindMapContext } from "./provider";
 import { CirclePlus, Pencil } from "lucide-react";
 
-export const MiddleNode = ({ ...node }) => {
+export const LastNode = ({ ...node }) => {
     const [label, setLabel] = useState(node.data.label);
+
     const { updateNodeData, addNodes } = useReactFlow();
-    const { isEditing: globalIsEditing, setIsEditing: globalSetIsEditingContext } = useContext(MindMapContext);
+    const { setIsEditing: setIsEditingContext } = useContext(MindMapContext);
     const [isEditing, setIsEditing] = useState(false);
-    const onEdit = useCallback(() => {
-        setIsEditing(true)
-        globalSetIsEditingContext(true)
-    }, [setIsEditing, globalSetIsEditingContext])
-
-    const offEdit = useCallback(() => {
-        setIsEditing(false);
-        globalSetIsEditingContext(false);
-        updateNodeData(node.id, { label: label });
-    }, [setIsEditing, globalSetIsEditingContext, node.id, label, updateNodeData])
-
+    const toggleEdit = () => {
+        if (!isEditing) {
+            setIsEditing(true)
+            setIsEditingContext(true)
+        } else {
+            setIsEditing(false);
+            setIsEditingContext(false);
+            updateNodeData(node.id, { label: label });
+        }
+    }
     return (
-        <div className="group">
+        <>
             <NodeToolbar isVisible={node.selected} position={Position.Bottom}>
                 <div className="p-1 flex gap-1 rounded-md bg-card shadow-md border py-1">
                     <button
@@ -38,6 +38,10 @@ export const MiddleNode = ({ ...node }) => {
             </NodeToolbar >
             <NodeToolbar isVisible={node.selected} position={Position.Right}>
                 <div className="p-1 flex gap-1 rounded-md bg-card shadow-md border py-1">
+                    <button onClick={toggleEdit}
+                        className="flex text-xs text-muted-foreground items-center gap-1 px-2 rounded-md hover:bg-accent hover:text-accent-foreground hover:cursor-pointer ">
+                        <Pencil className="w-4 h-4" />
+                        Edit</button>
                     <button
                         onClick={() => addNodes([{
                             id: crypto.randomUUID(),
@@ -52,36 +56,37 @@ export const MiddleNode = ({ ...node }) => {
                 </div>
             </NodeToolbar>
             <div
-                className={`relative font-xs bg-transparent text-card-foreground px-2 inline-block border-b ${node.selected ? `${isEditing || (globalIsEditing && node.selected) ? 'border-emerald-500' : ' border-blue-500'}` : ''}`}
+                className={` bg-card text-card-foreground py-2 px-2 rounded-md inline-block border ${node.selected ? `${isEditing ? 'border-emerald-500' : ' border-blue-500'}` : ''}`}
             >
                 <div
                     className="relative flex items-center ">
-                    {isEditing || (globalIsEditing && node.selected) ? (
+                    {isEditing ? (
                         <input
+                            style={{ fontSize: '10px', width: `${Math.max(100, label.length * 10)}px` }}
                             value={label}
                             onChange={(e) => setLabel(e.target.value)}
+                            className="bg-transparent outline-none w-full resize-none overflow-wrap-break-word ring-0"
                             autoFocus
-                            className="w-full outline-none"
                             placeholder="Please enter your idea."
-                            onBlur={offEdit}
+                            onBlur={toggleEdit}
                             onKeyDown={(e) => {
                                 if (e.key === 'Escape') {
-                                    offEdit()
+                                    toggleEdit()
                                 }
                             }}
                         />
                     ) : (
                         <div
-                            onClick={onEdit}
-                            className="w-full overflow-wrap-break-word cursor-text"
+                            style={{ fontSize: '10px' }}
+                            onMouseDown={e => e.preventDefault()}
+                            className="w-full overflow-wrap-break-word "
                         >
                             {node.data.label}
                         </div>
                     )}
                 </div>
                 <Handle type="target" position={Position.Left} />
-                <Handle type="source" position={Position.Right} />
             </div >
-        </div>
+        </>
     );
 };

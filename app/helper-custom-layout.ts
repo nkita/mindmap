@@ -115,6 +115,7 @@ export const getLayoutedElements = (
                 ...node.data,
                 children: layoutNode.data.children.map((child: MindMapNode) => child.id)
             },
+            type: layoutNode.data.children.map((child: MindMapNode) => child.id).length > 0 ? 'middleNode' : 'lastNode',
             position: {
                 x: layoutNode.x,
                 y: layoutNode.y
