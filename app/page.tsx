@@ -25,7 +25,7 @@ import { getLayoutedElements } from './helper-custom-layout';
 import { determineSourceAndRank, recalculateRanks, sortNodesByRank, traverseHierarchy } from './helper-node-sort';
 
 const Flow = () => {
-  const { getNode } = useReactFlow();
+  const { getNode, fitView } = useReactFlow();
 
   const [nodes, setNodes] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -116,7 +116,19 @@ const Flow = () => {
     }
 
 
-  const handleSelectionChange = (params: OnSelectionChangeParams) => setSelectedNodes(params.nodes);
+  const handleSelectionChange = (params: OnSelectionChangeParams) => {
+    setSelectedNodes(params.nodes);
+    
+    // 選択されたノードがある場合、そのノードにフォーカス
+    // if (params.nodes.length > 0) {
+    //   setTimeout(() => {
+    //     fitView({
+    //       nodes: params.nodes,
+    //       padding: 0.5,
+    //     });
+    //   }, 50);
+    // }
+  };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (!isEditing && event.key === 'Tab') {
@@ -143,7 +155,6 @@ const Flow = () => {
         fitView={true}
         selectionKeyCode={null}
         multiSelectionKeyCode={null}
-        style={{ backgroundColor: "#F7F9FB" }}
       >
         <Panel position="top-right">
           <div className='flex gap-2'>
@@ -152,7 +163,9 @@ const Flow = () => {
             <button className='bg-blue-500 text-white p-2 rounded-md' onClick={() => onLayout('LR')}>horizontal layout</button>
           </div>
         </Panel>
-        <Background />
+        <Background 
+        color="#fff"
+        />
         <Controls />
       </ReactFlow>
     </div>
