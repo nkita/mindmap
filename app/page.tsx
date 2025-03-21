@@ -25,7 +25,7 @@ import { getLayoutedElements } from './helper-custom-layout';
 import { determineSourceAndRank, recalculateRanks, sortNodesByRank, traverseHierarchy } from './helper-node-sort';
 
 const Flow = () => {
-  const { getNode, fitView } = useReactFlow();
+  const { getNode } = useReactFlow();
 
   const [nodes, setNodes] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -118,7 +118,7 @@ const Flow = () => {
 
   const handleSelectionChange = (params: OnSelectionChangeParams) => {
     setSelectedNodes(params.nodes);
-    
+
     // 選択されたノードがある場合、そのノードにフォーカス
     // if (params.nodes.length > 0) {
     //   setTimeout(() => {
@@ -163,8 +163,8 @@ const Flow = () => {
             <button className='bg-blue-500 text-white p-2 rounded-md' onClick={() => onLayout('LR')}>horizontal layout</button>
           </div>
         </Panel>
-        <Background 
-        color="#fff"
+        <Background
+          color="#fff"
         />
         <Controls />
       </ReactFlow>

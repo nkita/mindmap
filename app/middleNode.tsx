@@ -1,16 +1,27 @@
 import { Position, Handle, NodeToolbar, useReactFlow } from "@xyflow/react";
 import { useState, useContext, useCallback, useEffect, useRef } from "react";
 import { MindMapContext } from "./provider";
-import { CirclePlus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
 import { PlainTextPlugin } from '@lexical/react/LexicalPlainTextPlugin';
 import { ContentEditable } from '@lexical/react/LexicalContentEditable';
 import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { $getRoot, $createParagraphNode, $createTextNode } from 'lexical';
+import React from "react";
+
+// Lexicalエディタコンポーネントの型定義
+interface LexicalEditorProps {
+    initialValue: string;
+    onSave: (text: string) => void;
+    onBlur: () => void;
+    isEditing: boolean;
+}
 
 // Lexicalエディタコンポーネント
-const LexicalEditor = ({ initialValue, onSave, onBlur }) => {
+const LexicalEditor = ({ initialValue, onSave, onBlur, isEditing }: LexicalEditorProps) => {
+    const editorRef = useRef<HTMLDivElement>(null);
+
     // エディタの設定
     const initialConfig = {
         namespace: 'MindMapEditor',
@@ -20,26 +31,39 @@ const LexicalEditor = ({ initialValue, onSave, onBlur }) => {
                 base: 'outline-none'
             }
         },
-        onError: (error) => console.error(error),
-        editable: true,
+        onError: (error: Error) => console.error(error),
+        editable: isEditing,
     };
+
+    // 編集モードが変わったときにフォーカスを設定
+    useEffect(() => {
+        if (isEditing && editorRef.current) {
+            const editorElement = editorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
+            if (editorElement) {
+                setTimeout(() => {
+                    editorElement.focus();
+                }, 0);
+            }
+        }
+    }, [isEditing]);
 
     return (
         <LexicalComposer initialConfig={initialConfig}>
-            <div className="editor-container">
+            <div className="editor-container" ref={editorRef}>
                 <PlainTextPlugin
-                    contentEditable={<ContentEditable className="w-full outline-none min-h-[1.5em]" />}
-                    placeholder={<div className="text-zinc-400">アイデアを入力...</div>}
+                    contentEditable={<ContentEditable className={`w-full outline-none min-h-[1.5em] ${!isEditing ? 'pointer-events-none' : ''}`} />}
+                    placeholder={isEditing ? <div className="text-zinc-400">アイデアを入力...</div> : null}
+                    ErrorBoundary={({ children }) => <>{children}</>}
                 />
                 <HistoryPlugin />
-                <EditorValuePlugin initialValue={initialValue} onSave={onSave} onBlur={onBlur} />
+                <EditorValuePlugin initialValue={initialValue} onSave={onSave} onBlur={onBlur} isEditing={isEditing} />
             </div>
         </LexicalComposer>
     );
 };
 
 // エディタの値を管理するプラグイン
-function EditorValuePlugin({ initialValue, onSave, onBlur }) {
+function EditorValuePlugin({ initialValue, onSave, onBlur, isEditing }: LexicalEditorProps) {
     const [editor] = useLexicalComposerContext();
     const initialized = useRef(false);
 
@@ -47,11 +71,11 @@ function EditorValuePlugin({ initialValue, onSave, onBlur }) {
     useEffect(() => {
         if (!initialized.current && initialValue) {
             initialized.current = true;
-            
+
             editor.update(() => {
                 const root = $getRoot();
                 root.clear();
-                
+
                 const paragraph = $createParagraphNode();
                 const text = $createTextNode(initialValue);
                 paragraph.append(text);
@@ -66,15 +90,16 @@ function EditorValuePlugin({ initialValue, onSave, onBlur }) {
             editorState.read(() => {
                 const root = $getRoot();
                 const text = root.getTextContent();
-                onSave(text);
+                // 末尾の改行を削除
+                onSave(text.replace(/\n$/, ''));
             });
         });
     }, [editor, onSave]);
 
     // キーボードイベントを処理
     useEffect(() => {
-        const handleKeyDown = (e) => {
-            if (e.key === 'Escape') {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && isEditing) {
                 editor.blur();
                 onBlur();
             }
@@ -89,12 +114,14 @@ function EditorValuePlugin({ initialValue, onSave, onBlur }) {
             }
             return null;
         });
-    }, [editor, onBlur]);
+    }, [editor, onBlur, isEditing]);
 
     // onBlurイベントを処理
     useEffect(() => {
         const handleBlur = () => {
-            onBlur();
+            if (isEditing) {
+                onBlur();
+            }
         };
 
         editor.registerRootListener((rootElement) => {
@@ -106,7 +133,7 @@ function EditorValuePlugin({ initialValue, onSave, onBlur }) {
             }
             return null;
         });
-    }, [editor, onBlur]);
+    }, [editor, onBlur, isEditing]);
 
     return null;
 }
@@ -116,7 +143,7 @@ export const MiddleNode = ({ ...node }) => {
     const { updateNodeData, addNodes } = useReactFlow();
     const { isEditing: globalIsEditing, setIsEditing: globalSetIsEditingContext } = useContext(MindMapContext);
     const [isEditing, setIsEditing] = useState(false);
-    
+
     const onEdit = useCallback(() => {
         setIsEditing(true);
         globalSetIsEditingContext(true);
@@ -129,15 +156,18 @@ export const MiddleNode = ({ ...node }) => {
     }, [setIsEditing, globalSetIsEditingContext, node.id, label, updateNodeData]);
 
     // ラベルの更新処理
-    const handleLabelChange = useCallback((newText) => {
+    const handleLabelChange = useCallback((newText: string) => {
         setLabel(newText);
     }, []);
+
+    // 編集モードかどうか
+    const isNodeEditing = isEditing || (globalIsEditing && node.selected);
 
     return (
         <div
             onDoubleClick={onEdit}
             className="group cursor-default">
-            <NodeToolbar isVisible={node.selected && !isEditing && !(globalIsEditing && node.selected)} position={Position.Bottom}>
+            <NodeToolbar isVisible={node.selected && !isNodeEditing} position={Position.Bottom}>
                 <button
                     onClick={() => addNodes([{
                         id: crypto.randomUUID(),
@@ -146,12 +176,11 @@ export const MiddleNode = ({ ...node }) => {
                         position: { x: 0, y: 0 },
                         selected: true
                     }])}
-                    className="flex text-xs items-center gap-1.5 px-3 py-1.5 rounded-md bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 transition-colors shadow-sm">
-                    <CirclePlus className="w-4 h-4" />
-                    <span className="font-medium">Enter</span>
+                    className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white cursor-pointer hover:from-blue-600 hover:to-indigo-700 hover:shadow-lg hover:scale-105 transition-all duration-200 shadow-md">
+                    <Plus className="w-5 h-5" />
                 </button>
             </NodeToolbar>
-            <NodeToolbar isVisible={node.selected && !isEditing && !(globalIsEditing && node.selected)} position={Position.Right}>
+            <NodeToolbar isVisible={node.selected && !isNodeEditing} position={Position.Right}>
                 <button
                     onClick={() => addNodes([{
                         id: crypto.randomUUID(),
@@ -160,22 +189,27 @@ export const MiddleNode = ({ ...node }) => {
                         position: { x: 0, y: 0 },
                         selected: true
                     }])}
-                    className="flex text-xs items-center gap-1.5 px-3 py-1.5 rounded-md bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 transition-colors shadow-sm">
-                    <CirclePlus className="w-4 h-4" />
-                    <span className="font-medium">Tab</span>
+                    className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white cursor-pointer hover:from-blue-600 hover:to-indigo-700 hover:shadow-lg hover:scale-105 transition-all duration-200 shadow-md">
+                    <Plus className="w-5 h-5" />
                 </button>
             </NodeToolbar>
             <div
-                className={`w-full text-[8px] relative bg-transparent text-card-foreground px-2 inline-block border rounded-md p-2 ${node.selected ? `${isEditing || (globalIsEditing && node.selected) ? 'border-emerald-500' : ' border-blue-500'}` : 'border-transparent'} `}>
-                {isEditing || (globalIsEditing && node.selected) ? (
-                    <LexicalEditor 
-                        initialValue={label} 
+                className={`w-full text-[8px] relative bg-zinc-50 text-card-foreground px-2 inline-block border rounded-md p-2 ${node.selected ? `${isNodeEditing ? 'border-emerald-500' : ' border-blue-500'}` : 'border-transparent'} `}>
+                {isNodeEditing ? (
+                    <LexicalEditor
+                        initialValue={label}
                         onSave={handleLabelChange}
                         onBlur={offEdit}
+                        isEditing={isNodeEditing}
                     />
                 ) : (
                     <div className="w-full break-words overflow-wrap-break-word whitespace-pre-wrap">
-                        {label ? <span>{label}</span> : <span className="text-zinc-400">No idea.</span>}
+                        {label ? label.split('\n').map((line: string, i: number) => (
+                            <React.Fragment key={i}>
+                                {i > 0 && <br />}
+                                {line || ' '}
+                            </React.Fragment>
+                        )) : <span className="text-zinc-400">No idea.</span>}
                     </div>
                 )}
             </div>
