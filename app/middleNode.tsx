@@ -149,6 +149,14 @@ export const MiddleNode = ({ ...node }) => {
     // 編集モードかどうか
     const isNodeEditing = isEditing || (globalIsEditing && node.selected);
 
+    // ハンドルのスタイル
+    const handleStyle = {
+        width: 0,
+        height: 0,
+        backgroundColor: 'transparent',
+        border: 'none',
+    };
+
     // 非表示の場合は何も描画しない
     if (!isDisplayed) {
         return null;
@@ -179,7 +187,8 @@ export const MiddleNode = ({ ...node }) => {
                 {hasChildNodes && (
                     <button
                         onClick={toggleChildren}
-                        className="flex items-center justify-center w-6 h-6 rounded-md cursor-pointer bg-white hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors shadow-md border border-gray-300 dark:border-gray-600"
+                        style={{transform: 'translateX(-8px)'}}
+                        className="flex items-center justify-center w-6 h-6 rounded-md cursor-pointer bg-white hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors shadow-md border dark:border-gray-600"
                         title={showChildren ? "子要素を非表示" : "子要素を表示"}
                     >
                         {showChildren ? (
@@ -227,8 +236,18 @@ export const MiddleNode = ({ ...node }) => {
                     </div>
                 )}
             </div>
-            <Handle type="target" position={Position.Left} />
-            <Handle type="source" position={Position.Right} />
+            <Handle 
+                type="target" 
+                position={Position.Left} 
+                style={handleStyle}
+                isConnectable={false}
+            />
+            <Handle 
+                type="source" 
+                position={Position.Right} 
+                style={handleStyle}
+                isConnectable={false}
+            />
         </div>
     );
 };
