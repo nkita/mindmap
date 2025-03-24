@@ -1,7 +1,7 @@
 import { Position, Handle, NodeToolbar, useReactFlow } from "@xyflow/react";
 import { useState, useContext, useCallback, useRef, useEffect } from "react";
 import { MindMapContext } from "./provider";
-import { Plus, Minus } from "lucide-react";
+import { Plus, Minus, Pencil, Trash } from "lucide-react";
 import { LexicalEditor as LexicalEditorType } from 'lexical';
 import React from "react";
 import RichTextEditor, { EditorToolbar } from "./components/RichTextEditor";
@@ -167,9 +167,26 @@ export const MiddleNode = ({ ...node }) => {
             onDoubleClick={onEdit}
             className="group cursor-default">
             {/* リッチエディタツールバー - 編集モード時のみ表示 */}
+            <NodeToolbar isVisible={node.selected && !isNodeEditing} position={Position.Top} className="bg-white dark:bg-gray-800 p-1 rounded-md shadow-md border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center gap-1">
+                    {/* 編集ボタンと削除ボタン */}
+                    <button
+                        onClick={onEdit}
+                        className={`p-2 rounded hover:bg-gray-200 transition-colors hover:cursor-pointer`}>
+                        <Pencil className="w-3 h-3 text-gray-800" />
+                    </button>
+                    <button
+                        onClick={() => { }}
+                        className={`p-2 rounded bg-red-500/50 text-white transition-colors hover:cursor-pointer`}>
+                        <Trash className="w-3 h-3" />
+                    </button>
+                </div>
+            </NodeToolbar>
+            
+            {/* リッチエディタツールバー - 編集モード時のみ表示 */}
             <NodeToolbar isVisible={isNodeEditing} position={Position.Top} className="bg-white dark:bg-gray-800 p-1 rounded-md shadow-md border border-gray-200 dark:border-gray-700">
                 <div className="flex items-center gap-1">
-                    <EditorToolbar editor={editor} />
+                    <EditorToolbar editor={editor} onClose={offEdit} />
                 </div>
             </NodeToolbar>
 
@@ -181,13 +198,13 @@ export const MiddleNode = ({ ...node }) => {
                     <Plus className="w-5 h-5" />
                 </button>
             </NodeToolbar>
-            
+
             {/* 子要素の表示・非表示を切り替えるボタンを含むツールバー */}
             <NodeToolbar position={Position.Right} isVisible className="flex gap-2 items-center">
                 {hasChildNodes && (
                     <button
                         onClick={toggleChildren}
-                        style={{transform: 'translateX(-8px)'}}
+                        style={{ transform: 'translateX(-8px)' }}
                         className="flex items-center justify-center w-6 h-6 rounded-md cursor-pointer bg-white hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors shadow-md border dark:border-gray-600"
                         title={showChildren ? "子要素を非表示" : "子要素を表示"}
                     >
@@ -209,7 +226,7 @@ export const MiddleNode = ({ ...node }) => {
 
             <div
                 className={`w-full text-[8px] relative bg-zinc-50 dark:bg-blue-900/10 text-card-foreground px-2 inline-block border rounded-md p-2 ${node.selected ? `${isNodeEditing ? 'border-emerald-500' : ' border-blue-500'}` : 'border-transparent'}`}>
-                
+
                 {isNodeEditing ? (
                     <RichTextEditor
                         initialValue={label}
@@ -236,15 +253,15 @@ export const MiddleNode = ({ ...node }) => {
                     </div>
                 )}
             </div>
-            <Handle 
-                type="target" 
-                position={Position.Left} 
+            <Handle
+                type="target"
+                position={Position.Left}
                 style={handleStyle}
                 isConnectable={false}
             />
-            <Handle 
-                type="source" 
-                position={Position.Right} 
+            <Handle
+                type="source"
+                position={Position.Right}
                 style={handleStyle}
                 isConnectable={false}
             />
