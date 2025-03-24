@@ -165,11 +165,10 @@ export const MiddleNode = ({ ...node }) => {
     return (
         <div
             onDoubleClick={onEdit}
-            className="group cursor-default">
+            className={`group ${isNodeEditing ? 'cursor-text' : 'cursor-default'}`}>
             {/* リッチエディタツールバー - 編集モード時のみ表示 */}
             <NodeToolbar isVisible={node.selected && !isNodeEditing} position={Position.Top} className="bg-white dark:bg-gray-800 p-1 rounded-md shadow-md border border-gray-200 dark:border-gray-700">
                 <div className="flex items-center gap-1">
-                    {/* 編集ボタンと削除ボタン */}
                     <button
                         onClick={onEdit}
                         className={`p-2 rounded hover:bg-gray-200 transition-colors hover:cursor-pointer`}>
@@ -182,7 +181,7 @@ export const MiddleNode = ({ ...node }) => {
                     </button>
                 </div>
             </NodeToolbar>
-            
+
             {/* リッチエディタツールバー - 編集モード時のみ表示 */}
             <NodeToolbar isVisible={isNodeEditing} position={Position.Top} className="bg-white dark:bg-gray-800 p-1 rounded-md shadow-md border border-gray-200 dark:border-gray-700">
                 <div className="flex items-center gap-1">
@@ -201,7 +200,7 @@ export const MiddleNode = ({ ...node }) => {
 
             {/* 子要素の表示・非表示を切り替えるボタンを含むツールバー */}
             <NodeToolbar position={Position.Right} isVisible className="flex gap-2 items-center">
-                {hasChildNodes && (
+                {hasChildNodes ? (
                     <button
                         onClick={toggleChildren}
                         style={{ transform: 'translateX(-8px)' }}
@@ -214,18 +213,23 @@ export const MiddleNode = ({ ...node }) => {
                             <Plus className="w-3 h-3 text-gray-800 dark:text-gray-200" />
                         )}
                     </button>
+                ) : (
+                    <>
+                        {(node.selected && !isNodeEditing) &&
+                            <button
+                                onClick={addChildNode}
+                                className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white cursor-pointer hover:from-blue-600 hover:to-indigo-700 hover:shadow-lg hover:scale-105 transition-all duration-200 shadow-md">
+                                <Plus className="w-5 h-5" />
+                            </button>
+                        }
+                    </>
                 )}
-                {(node.selected && !isNodeEditing) &&
-                    <button
-                        onClick={addChildNode}
-                        className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white cursor-pointer hover:from-blue-600 hover:to-indigo-700 hover:shadow-lg hover:scale-105 transition-all duration-200 shadow-md">
-                        <Plus className="w-5 h-5" />
-                    </button>
-                }
             </NodeToolbar>
 
             <div
-                className={`w-full text-[8px] relative bg-zinc-50 dark:bg-blue-900/10 text-card-foreground px-2 inline-block border rounded-md p-2 ${node.selected ? `${isNodeEditing ? 'border-emerald-500' : ' border-blue-500'}` : 'border-transparent'}`}>
+                className={`w-full text-[8px] relative bg-zinc-50 dark:bg-blue-900/10 text-card-foreground px-2 inline-block border rounded-md p-2 
+                    ${isNodeEditing ? 'hover:cursor-text border-emerald-500' : `${node.selected ? 'border-blue-500' : 'border-transparent'}`}
+                    `}>
 
                 {isNodeEditing ? (
                     <RichTextEditor
@@ -265,6 +269,6 @@ export const MiddleNode = ({ ...node }) => {
                 style={handleStyle}
                 isConnectable={false}
             />
-        </div>
+        </div >
     );
 };

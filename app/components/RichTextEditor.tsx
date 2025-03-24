@@ -159,40 +159,15 @@ function EditorValuePlugin({ initialValue, initialState, onSave, onBlur, isEditi
       }
     };
 
-    const handleBlur = (e: FocusEvent) => {
-      if (!isEditing) return;
-
-      // 既存のタイムアウトをクリア
-      if (blurTimeoutRef.current) {
-        clearTimeout(blurTimeoutRef.current);
-        blurTimeoutRef.current = null;
-      }
-
-      const relatedTarget = e.relatedTarget as HTMLElement;
-      if (relatedTarget) {
-        // ポップオーバーやツールバー内の要素にフォーカスが移った場合は無視
-        if (relatedTarget.closest('[role="dialog"]') || 
-            relatedTarget.closest('[role="toolbar"]') ||
-            relatedTarget.closest('.popover-content') ||
-            relatedTarget.closest('form') ||
-            relatedTarget.closest('button') ||
-            relatedTarget.closest('input')) {
-          return;
-        }
-      }
-
-      // 少し遅延させてonBlurを呼び出す
-      blurTimeoutRef.current = setTimeout(() => {
-        if (!isHandlingPopover.current) {
-          onBlur?.();
-        }
-      }, 200);
+    const handleBlur = () => {
+      // Escapeキーでのブラーのみを処理するため、ここでは何もしない
+      return;
     };
 
     // グローバルフラグを設定する関数を公開
     window.setIsHandlingPopover = (value: boolean) => {
       isHandlingPopover.current = value;
-      
+
       if (!value && blurTimeoutRef.current) {
         clearTimeout(blurTimeoutRef.current);
         blurTimeoutRef.current = null;
@@ -250,10 +225,10 @@ function CustomLinkPlugin() {
 }
 
 // UI コンポーネント
-function FormatButton({ editor, format, icon }: { 
-  editor: LexicalEditorType, 
-  format: TextFormatType | 'link', 
-  icon: React.ReactNode 
+function FormatButton({ editor, format, icon }: {
+  editor: LexicalEditorType,
+  format: TextFormatType | 'link',
+  icon: React.ReactNode
 }) {
   const onFormatClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -280,9 +255,9 @@ function FormatButton({ editor, format, icon }: {
 }
 
 // ツールバーコンポーネント
-export function EditorToolbar({ editor, onClose }: { 
-  editor: LexicalEditorType | null, 
-  onClose?: () => void 
+export function EditorToolbar({ editor, onClose }: {
+  editor: LexicalEditorType | null,
+  onClose?: () => void
 }) {
   const [formatState, setFormatState] = useState({
     isBold: false,
@@ -362,19 +337,19 @@ export function EditorToolbar({ editor, onClose }: {
   const handleLinkSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     if (window.setIsHandlingPopover) {
       window.setIsHandlingPopover(true);
     }
-    
+
     if (linkUrl.trim()) {
       editor.dispatchCommand(TOGGLE_LINK_COMMAND, linkUrl);
     } else if (formatState.isLink) {
       editor.dispatchCommand(TOGGLE_LINK_COMMAND, null);
     }
-    
+
     setIsLinkPopoverOpen(false);
-    
+
     setTimeout(() => {
       editor.focus();
       setTimeout(() => {
@@ -540,6 +515,25 @@ export default function RichTextEditor({
   const internalEditorRef = useRef<HTMLDivElement>(null);
   const actualEditorRef = editorRef || internalEditorRef;
 
+  // 最後のテキストノードを見つける補助関数
+  const findLastTextNode = useCallback((node: Node | null): Node | null => {
+    if (!node) return null;
+
+    if (node.nodeType === Node.TEXT_NODE) {
+      return node;
+    }
+
+    // 子ノードを後ろから探索
+    for (let i = node.childNodes.length - 1; i >= 0; i--) {
+      const lastTextNode = findLastTextNode(node.childNodes[i]);
+      if (lastTextNode) {
+        return lastTextNode;
+      }
+    }
+
+    return null;
+  }, []);
+
   // エディタの設定
   const initialConfig = {
     namespace: 'MindMapEditor',
@@ -573,10 +567,37 @@ export default function RichTextEditor({
     if (isEditing && actualEditorRef.current) {
       const editorElement = actualEditorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
       if (editorElement) {
-        setTimeout(() => editorElement.focus(), 0);
+        setTimeout(() => {
+          editorElement.focus();
+
+          // カーソルを文字列の最後に配置
+          const selection = window.getSelection();
+          const range = document.createRange();
+
+          // テキストノードを取得
+          if (editorElement.childNodes.length > 0) {
+            const lastChild = editorElement.lastChild;
+            if (lastChild && lastChild.nodeType === Node.TEXT_NODE) {
+              // テキストノードの場合は最後の位置に
+              range.setStart(lastChild, lastChild.textContent?.length || 0);
+            } else {
+              // 要素ノードの場合はその中の最後に
+              const lastTextNode = findLastTextNode(lastChild);
+              if (lastTextNode) {
+                range.setStart(lastTextNode, lastTextNode.textContent?.length || 0);
+              } else {
+                // テキストノードがない場合は要素の最後に
+                range.selectNodeContents(editorElement);
+                range.collapse(false);
+              }
+            }
+            selection?.removeAllRanges();
+            selection?.addRange(range);
+          }
+        }, 0);
       }
     }
-  }, [isEditing, actualEditorRef]);
+  }, [isEditing, actualEditorRef, findLastTextNode]);
 
   return (
     <div ref={actualEditorRef} className={`rich-text-editor ${isEditing ? 'editing' : ''}`}>
