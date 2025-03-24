@@ -51,6 +51,14 @@ export interface RichTextEditorProps {
 // コマンド定数
 const TEXT_COLOR_COMMAND: LexicalCommand<string> = createCommand('textColor');
 
+// カラーパレット用の色の配列
+const COLORS = [
+  '#000000', '#5c5c5c', '#8e8e8e', '#c3c3c3', '#ffffff',
+  '#980000', '#ff0000', '#ff9900', '#ffff00', '#00ff00',
+  '#00ffff', '#4a86e8', '#0000ff', '#9900ff', '#ff00ff',
+  '#e6b8af', '#d9ead3', '#d0e0e3',
+];
+
 // ユーティリティ関数
 const focusEditor = (editor: LexicalEditorType) => {
   setTimeout(() => editor.focus(), 0);
@@ -99,10 +107,10 @@ function TextColorPlugin() {
 function EditorValuePlugin({ initialValue, initialState, onSave, onBlur, isEditing }: RichTextEditorProps) {
   const [editor] = useLexicalComposerContext();
   const initialized = useRef(false);
-  const isHandlingPopover = useRef(false); // ポップオーバー操作中かどうかのフラグ
-  const blurTimeoutRef = useRef<NodeJS.Timeout | null>(null); // タイムアウトを保持するref
+  const isHandlingPopover = useRef(false);
+  const blurTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // プレーンテキストとして初期化する関数
+  // プレーンテキストとして初期化
   const setPlainText = useCallback((text: string) => {
     editor.update(() => {
       const root = $getRoot();
@@ -175,18 +183,16 @@ function EditorValuePlugin({ initialValue, initialState, onSave, onBlur, isEditi
 
       // 少し遅延させてonBlurを呼び出す
       blurTimeoutRef.current = setTimeout(() => {
-        // ポップオーバー操作中でなければonBlurを呼び出す
         if (!isHandlingPopover.current) {
           onBlur?.();
         }
-      }, 200); // タイムアウトを長めに設定
+      }, 200);
     };
 
     // グローバルフラグを設定する関数を公開
     window.setIsHandlingPopover = (value: boolean) => {
       isHandlingPopover.current = value;
       
-      // ポップオーバーが閉じられたときに既存のタイムアウトをクリア
       if (!value && blurTimeoutRef.current) {
         clearTimeout(blurTimeoutRef.current);
         blurTimeoutRef.current = null;
@@ -218,7 +224,6 @@ function CustomLinkPlugin() {
   const [editor] = useLexicalComposerContext();
 
   useEffect(() => {
-    // リンククリックイベントを処理する関数
     const handleLinkClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
       const linkElement = target.closest('a');
@@ -245,8 +250,11 @@ function CustomLinkPlugin() {
 }
 
 // UI コンポーネント
-
-function FormatButton({ editor, format, icon }: { editor: LexicalEditorType, format: TextFormatType | 'link', icon: React.ReactNode }) {
+function FormatButton({ editor, format, icon }: { 
+  editor: LexicalEditorType, 
+  format: TextFormatType | 'link', 
+  icon: React.ReactNode 
+}) {
   const onFormatClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -263,7 +271,7 @@ function FormatButton({ editor, format, icon }: { editor: LexicalEditorType, for
     <button
       onMouseDown={(e) => e.preventDefault()}
       onClick={onFormatClick}
-      className={`p-2 rounded hover:cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors `}
+      className="p-2 rounded hover:cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
       title={format}
     >
       {icon}
@@ -271,16 +279,11 @@ function FormatButton({ editor, format, icon }: { editor: LexicalEditorType, for
   );
 }
 
-// カラーパレット用の色の配列を定義
-const colors = [
-  '#000000', '#5c5c5c', '#8e8e8e', '#c3c3c3', '#ffffff',
-  '#980000', '#ff0000', '#ff9900', '#ffff00', '#00ff00',
-  '#00ffff', '#4a86e8', '#0000ff', '#9900ff', '#ff00ff',
-  '#e6b8af', '#d9ead3', '#d0e0e3',
-];
-
-export function EditorToolbar({ editor, onClose }: { editor: LexicalEditorType | null, onClose?: () => void }) {
-  // 状態変数を定義
+// ツールバーコンポーネント
+export function EditorToolbar({ editor, onClose }: { 
+  editor: LexicalEditorType | null, 
+  onClose?: () => void 
+}) {
   const [formatState, setFormatState] = useState({
     isBold: false,
     isItalic: false,
@@ -336,6 +339,52 @@ export function EditorToolbar({ editor, onClose }: { editor: LexicalEditorType |
 
   if (!editor) return null;
 
+  // ポップオーバーの状態を変更する関数
+  const handlePopoverChange = (open: boolean) => {
+    if (window.setIsHandlingPopover) {
+      window.setIsHandlingPopover(open);
+    }
+    setIsLinkPopoverOpen(open);
+  };
+
+  // ポップオーバーを閉じてフォーカスを戻す関数
+  const closePopoverAndFocus = () => {
+    setIsLinkPopoverOpen(false);
+    setTimeout(() => {
+      if (window.setIsHandlingPopover) {
+        window.setIsHandlingPopover(false);
+      }
+      editor.focus();
+    }, 10);
+  };
+
+  // リンクを挿入/更新する関数
+  const handleLinkSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (window.setIsHandlingPopover) {
+      window.setIsHandlingPopover(true);
+    }
+    
+    if (linkUrl.trim()) {
+      editor.dispatchCommand(TOGGLE_LINK_COMMAND, linkUrl);
+    } else if (formatState.isLink) {
+      editor.dispatchCommand(TOGGLE_LINK_COMMAND, null);
+    }
+    
+    setIsLinkPopoverOpen(false);
+    
+    setTimeout(() => {
+      editor.focus();
+      setTimeout(() => {
+        if (window.setIsHandlingPopover) {
+          window.setIsHandlingPopover(false);
+        }
+      }, 100);
+    }, 10);
+  };
+
   return (
     <div className="flex items-center gap-1">
       <FormatButton editor={editor} format="bold" icon={<Bold className="w-3 h-3" />} />
@@ -343,24 +392,14 @@ export function EditorToolbar({ editor, onClose }: { editor: LexicalEditorType |
       <FormatButton editor={editor} format="underline" icon={<Underline className="w-3 h-3" />} />
       <FormatButton editor={editor} format="code" icon={<Code className="w-3 h-3" />} />
 
-      <Popover open={isLinkPopoverOpen} onOpenChange={(open) => {
-        // ポップオーバーの開閉状態を変更する前にフラグを設定
-        if (window.setIsHandlingPopover) {
-          window.setIsHandlingPopover(open);
-        }
-        setIsLinkPopoverOpen(open);
-      }}>
+      <Popover open={isLinkPopoverOpen} onOpenChange={handlePopoverChange}>
         <PopoverTrigger asChild>
           <button
             className={`p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors ${formatState.isLink ? 'bg-blue-100 dark:bg-blue-900/30' : ''}`}
-            onMouseDown={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
+            onMouseDown={(e) => e.preventDefault()}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              // ポップアップを開く
               if (window.setIsHandlingPopover) {
                 window.setIsHandlingPopover(true);
               }
@@ -375,53 +414,14 @@ export function EditorToolbar({ editor, onClose }: { editor: LexicalEditorType |
           className="w-80 popover-content"
           onEscapeKeyDown={(e) => {
             e.preventDefault();
-            setIsLinkPopoverOpen(false);
-            setTimeout(() => {
-              if (window.setIsHandlingPopover) {
-                window.setIsHandlingPopover(false);
-              }
-              editor.focus();
-            }, 10);
+            closePopoverAndFocus();
           }}
           onInteractOutside={(e) => {
             e.preventDefault();
-            setIsLinkPopoverOpen(false);
-            setTimeout(() => {
-              if (window.setIsHandlingPopover) {
-                window.setIsHandlingPopover(false);
-              }
-              editor.focus();
-            }, 10);
+            closePopoverAndFocus();
           }}
         >
-          <form onSubmit={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            // ポップオーバー操作中フラグを設定
-            if (window.setIsHandlingPopover) {
-              window.setIsHandlingPopover(true);
-            }
-            
-            if (linkUrl.trim()) {
-              editor.dispatchCommand(TOGGLE_LINK_COMMAND, linkUrl);
-            } else if (formatState.isLink) {
-              editor.dispatchCommand(TOGGLE_LINK_COMMAND, null);
-            }
-            
-            setIsLinkPopoverOpen(false);
-            
-            // フォーカスを戻す前にフラグをリセット
-            setTimeout(() => {
-              editor.focus();
-              // 少し遅延してからフラグをリセット
-              setTimeout(() => {
-                if (window.setIsHandlingPopover) {
-                  window.setIsHandlingPopover(false);
-                }
-              }, 100);
-            }, 10);
-          }}>
+          <form onSubmit={handleLinkSubmit}>
             <div className="grid gap-4">
               <div className="space-y-2">
                 <h4 className="font-medium leading-none">{formatState.isLink ? "リンクを編集" : "リンクを挿入"}</h4>
@@ -451,8 +451,7 @@ export function EditorToolbar({ editor, onClose }: { editor: LexicalEditorType |
                       e.preventDefault();
                       e.stopPropagation();
                       editor.dispatchCommand(TOGGLE_LINK_COMMAND, null);
-                      setIsLinkPopoverOpen(false);
-                      setTimeout(() => editor.focus(), 0);
+                      closePopoverAndFocus();
                     }}
                   >
                     リンクを削除
@@ -497,7 +496,7 @@ export function EditorToolbar({ editor, onClose }: { editor: LexicalEditorType |
           }}
         >
           <div className="grid grid-cols-3 gap-2">
-            {colors.map((color) => (
+            {COLORS.map((color) => (
               <button
                 key={color}
                 className="w-6 h-6 rounded-full border border-gray-300 dark:border-gray-600"
@@ -505,11 +504,9 @@ export function EditorToolbar({ editor, onClose }: { editor: LexicalEditorType |
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={(e) => {
                   e.preventDefault();
-                  if (editor) {
-                    editor.dispatchCommand(TEXT_COLOR_COMMAND, color);
-                    setIsColorPopoverOpen(false);
-                    setTimeout(() => editor.focus(), 0);
-                  }
+                  editor.dispatchCommand(TEXT_COLOR_COMMAND, color);
+                  setIsColorPopoverOpen(false);
+                  setTimeout(() => editor.focus(), 0);
                 }}
               />
             ))}
@@ -582,9 +579,8 @@ export default function RichTextEditor({
   }, [isEditing, actualEditorRef]);
 
   return (
-    <div ref={editorRef} className={`rich-text-editor ${isEditing ? 'editing' : ''}`}>
+    <div ref={actualEditorRef} className={`rich-text-editor ${isEditing ? 'editing' : ''}`}>
       <LexicalComposer initialConfig={initialConfig}>
-        {/* ツールバーはNodeToolbarで表示するため、ここでは表示しない */}
         <RichTextPlugin
           contentEditable={<ContentEditable className="w-full outline-none min-h-[1.5em]" />}
           placeholder={isEditing ? <div className="text-zinc-400">アイデアを入力...</div> : null}
@@ -600,7 +596,7 @@ export default function RichTextEditor({
           onBlur={onBlur}
           isEditing={isEditing}
         />
-        {<EditorInstancePlugin setEditorInstance={handleEditorInstance} />}
+        <EditorInstancePlugin setEditorInstance={handleEditorInstance} />
       </LexicalComposer>
     </div>
   );
