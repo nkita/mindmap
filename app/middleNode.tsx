@@ -103,19 +103,30 @@ export const MiddleNode = ({ ...node }) => {
 
     // 新しいノードを追加
     const addSiblingNode = useCallback(() => {
+        const newNodeId = crypto.randomUUID();
+        
         addNodes([{
-            id: crypto.randomUUID(),
+            id: newNodeId,
             type: "middleNode",
             data: {
                 label: "new data",
                 parent: node.data.parent,
                 rank: node.data.rank + 0.5,
                 showChildren: true,
-                display: true
+                display: true,
+                autoEdit: true // 自動編集モードのフラグを追加
             },
             position: { x: 0, y: 0 },
             selected: true
         }]);
+        
+        // 新しいノードを自動的に編集モードにするためのイベントを発火
+        setTimeout(() => {
+            const editEvent = new CustomEvent('autoEditNode', {
+                detail: { nodeId: newNodeId }
+            });
+            window.dispatchEvent(editEvent);
+        }, 100);
     }, [addNodes, node.data.parent, node.data.rank]);
 
     const addChildNode = useCallback(() => {
@@ -128,15 +139,18 @@ export const MiddleNode = ({ ...node }) => {
             });
         }
 
+        const newNodeId = crypto.randomUUID();
+        
         addNodes([{
-            id: crypto.randomUUID(),
+            id: newNodeId,
             type: "middleNode",
             data: {
                 label: "new data",
                 parent: node.id,
                 rank: 0,
                 showChildren: true,
-                display: true
+                display: true,
+                autoEdit: true // 自動編集モードのフラグを追加
             },
             position: { x: 0, y: 0 },
             selected: true
@@ -144,6 +158,14 @@ export const MiddleNode = ({ ...node }) => {
 
         // 子ノードを追加したら、hasChildNodesを更新
         setHasChildNodes(true);
+        
+        // 新しいノードを自動的に編集モードにするためのイベントを発火
+        setTimeout(() => {
+            const editEvent = new CustomEvent('autoEditNode', {
+                detail: { nodeId: newNodeId }
+            });
+            window.dispatchEvent(editEvent);
+        }, 100);
     }, [addNodes, node.id, showChildren, node.data, updateNodeData]);
 
     // 編集モードかどうか
@@ -156,6 +178,70 @@ export const MiddleNode = ({ ...node }) => {
         backgroundColor: 'transparent',
         border: 'none',
     };
+
+    // 自動編集モードの処理を追加
+    useEffect(() => {
+        // 自動編集モードのイベントリスナー
+        const handleAutoEdit = (event: CustomEvent<{nodeId: string}>) => {
+            if (event.detail.nodeId === node.id) {
+                // 編集モードを有効にする
+                onEdit();
+                
+                // エディタにフォーカスを設定
+                setTimeout(() => {
+                    if (editorRef.current) {
+                        const editorElement = editorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
+                        if (editorElement) {
+                            // フォーカスを設定
+                            editorElement.focus();
+                            
+                            // テキストを全選択（または必要に応じてカーソルを最後に配置）
+                            const selection = window.getSelection();
+                            const range = document.createRange();
+                            range.selectNodeContents(editorElement);
+                            selection?.removeAllRanges();
+                            selection?.addRange(range);
+                        }
+                    }
+                }, 200); // タイミングを少し遅らせてエディタが初期化されるのを待つ
+            }
+        };
+
+        // このノードが自動編集フラグを持っている場合、編集モードを有効にする
+        if (node.data.autoEdit) {
+            onEdit();
+            // フラグをリセット
+            updateNodeData(node.id, {
+                ...node.data,
+                autoEdit: false
+            });
+            
+            // エディタにフォーカスを設定
+            setTimeout(() => {
+                if (editorRef.current) {
+                    const editorElement = editorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
+                    if (editorElement) {
+                        // フォーカスを設定
+                        editorElement.focus();
+                        
+                        // テキスト全体を選択
+                        const selection = window.getSelection();
+                        const range = document.createRange();
+                        range.selectNodeContents(editorElement);
+                        selection?.removeAllRanges();
+                        selection?.addRange(range);
+                    }
+                }
+            }, 200); // タイミングを少し遅らせてエディタが初期化されるのを待つ
+        }
+
+        // イベントリスナーを登録
+        window.addEventListener('autoEditNode', handleAutoEdit as EventListener);
+        
+        return () => {
+            window.removeEventListener('autoEditNode', handleAutoEdit as EventListener);
+        };
+    }, [node.id, node.data, onEdit, updateNodeData]);
 
     // 非表示の場合は何も描画しない
     if (!isDisplayed) {

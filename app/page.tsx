@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useContext, KeyboardEvent, useState, useEffect } from 'react';
+import React, { useCallback, useContext, useState, useEffect } from 'react';
 import {
   Background,
   ReactFlow,
@@ -14,7 +14,6 @@ import {
   applyNodeChanges,
   ReactFlowProvider,
   NodeChange,
-  OnSelectionChangeParams,
 } from '@xyflow/react';
 
 import '@xyflow/react/dist/style.css';
@@ -22,7 +21,7 @@ import { initialNodes } from './initialElements';
 import { MiddleNode } from './middleNode';
 import { MindMapProvider, MindMapContext } from './provider';
 import { getLayoutedElements, NodeData } from './helper-custom-layout';
-import { determineSourceAndRank, recalculateRanks, sortNodesByRank, traverseHierarchy } from './helper-node-sort';
+import { recalculateRanks, sortNodesByRank, traverseHierarchy } from './helper-node-sort';
 
 // ノード変更時のハンドラー
 const handleNodeChanges = (
@@ -34,11 +33,11 @@ const handleNodeChanges = (
 ) => {
   // showChildrenの変更を検出
   const hasShowChildrenChange = changes.some(change => {
-    if (change.type === 'select' || change.type === 'remove' || 
-        change.type === 'dimensions' || change.type === 'position') {
+    if (change.type === 'select' || change.type === 'remove' ||
+      change.type === 'dimensions' || change.type === 'position') {
       return false;
     }
-    
+
     // ノードデータの変更をチェック
     if (change.type === 'replace') {
       const node = nodes.find(n => n.id === change.id);
@@ -47,7 +46,7 @@ const handleNodeChanges = (
         return true;
       }
     }
-    
+
     return false;
   });
 
@@ -57,33 +56,33 @@ const handleNodeChanges = (
     if (change.type === "add") {
       const newNodes = applyNodeChanges(changes, nodes.map(node => ({ ...node, selected: false })));
       const rootNode = newNodes.find(node => node.id === "root");
-      
+
       // 階層構造を走査してノードをソート
       const traversedNodes = traverseHierarchy(newNodes, "root", sortNodesByRank);
-      
+
       // 同一親ノード内でのランク再計算
       const sortedNodes = recalculateRanks(traversedNodes);
-      
+
       // レイアウト計算と状態更新
       const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
-        rootNode ? [rootNode, ...sortedNodes] : sortedNodes, 
-        'LR', 
+        rootNode ? [rootNode, ...sortedNodes] : sortedNodes,
+        'LR',
         getNode
       );
-      
+
       setNodes(layoutedNodes);
       setEdges(layoutedEdges);
       return;
-    } 
-    
+    }
+
     if (change.type === "dimensions") {
       const updatedNodes = applyNodeChanges(changes, nodes);
       const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
-        updatedNodes, 
-        'LR', 
+        updatedNodes,
+        'LR',
         getNode
       );
-      
+
       setNodes(layoutedNodes);
       setEdges(layoutedEdges);
       return;
@@ -94,14 +93,14 @@ const handleNodeChanges = (
   if (hasShowChildrenChange) {
     // 変更を適用
     const updatedNodes = applyNodeChanges(changes, nodes);
-    
+
     // レイアウトを再計算
     const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
       updatedNodes,
       'LR',
       getNode
     );
-    
+
     // 更新されたノードとエッジを設定
     setNodes(layoutedNodes);
     setEdges(layoutedEdges);
@@ -114,8 +113,8 @@ const handleNodeChanges = (
 
 // 子ノードの表示状態を更新する関数
 const updateChildNodesDisplay = (
-  nodeId: string, 
-  showChildren: boolean, 
+  nodeId: string,
+  showChildren: boolean,
   nodes: Node[]
 ): Node[] => {
   return nodes.map(node => {
@@ -129,24 +128,24 @@ const updateChildNodesDisplay = (
         }
       };
     }
-    
+
     // 子孫ノードの表示状態を更新
     let isDescendant = false;
     let parentId = (node.data as NodeData).parent;
-    
+
     // 親をたどって対象ノードの子孫かどうかを確認
     while (parentId) {
       if (parentId === nodeId) {
         isDescendant = true;
         break;
       }
-      
+
       // 親の親をたどる
       const parentNode = nodes.find(n => n.id === parentId);
       if (!parentNode) break;
       parentId = (parentNode.data as NodeData).parent;
     }
-    
+
     // 子孫ノードの場合、表示状態を更新
     if (isDescendant) {
       return {
@@ -158,17 +157,16 @@ const updateChildNodesDisplay = (
         style: showChildren ? undefined : { display: 'none' }
       };
     }
-    
+
     return node;
   });
 };
 
 // Flowコンポーネント
 const Flow = () => {
-  const { getNode } = useReactFlow();
+  const { getNode, getNodes, addNodes, updateNodeData } = useReactFlow();
   const [nodes, setNodes] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const [selectedNodes, setSelectedNodes] = useState<Node[]>([]);
   const { isEditing } = useContext(MindMapContext);
   const [update, setUpdate] = useState(false);
 
@@ -189,7 +187,7 @@ const Flow = () => {
   // ノード変更ハンドラー
   const onNodesChangeWithAutoLayout = useCallback((changes: NodeChange[]) => {
     handleNodeChanges(changes, nodes, getNode, setNodes, setEdges);
-    
+
     // 複数の変更がある場合は更新フラグを設定
     if (changes.length > 1) {
       setUpdate(true);
@@ -204,93 +202,121 @@ const Flow = () => {
     }
   }, [update, onLayout]);
 
-  // 新しいノードを追加
-  const handleAddNode = useCallback(
-    (selectedNodes: Node[], direction: "parallel" | "series") => {
-      const newNodeId = crypto.randomUUID();
-      
-      // ソースノードとランクの決定
-      const { sourceNodeId, newRank } = determineSourceAndRank(selectedNodes, direction, nodes, edges);
-
-      const newNode = {
-        id: newNodeId,
-        type: 'middleNode',
-        data: { 
-          label: 'new data', 
-          parent: sourceNodeId, 
-          rank: newRank,
-          showChildren: true,
-          display: true
-        },
-        position: { x: 0, y: 0 },
-        selected: true,
-      };
-      
-      const updatedNodes = [newNode, ...nodes.map(node => ({ ...node, selected: false }))];
-      const rootNode = nodes.find(node => node.id === "root");
-
-      // 階層構造を走査してノードをソート
-      const traversedNodes = traverseHierarchy(updatedNodes, "root", sortNodesByRank);
-
-      // 同一親ノード内でのランク再計算
-      const sortedNodes = recalculateRanks(traversedNodes);
-
-      // レイアウト計算と状態更新
-      const { nodes: newNodes, edges: newEdges } = getLayoutedElements(
-        rootNode ? [rootNode, ...sortedNodes] : sortedNodes,
-        'LR',
-        getNode
-      );
-
-      setNodes([...newNodes]);
-      setEdges([...newEdges]);
-    },
-    [nodes, edges, getNode, setNodes, setEdges]
-  );
-
   // 選択変更ハンドラー
-  const handleSelectionChange = useCallback((params: OnSelectionChangeParams) => {
-    setSelectedNodes(params.nodes);
+  const handleSelectionChange = useCallback(() => {
+    // 何もしない
   }, []);
 
-  // キーボードショートカット
-  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
-    if (!isEditing) {
-      if (event.key === 'Tab') {
-        event.preventDefault();
-        handleAddNode(selectedNodes, "series");
+  // キーボードショートカットの処理
+  useEffect(() => {
+    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
+      // 編集中は何もしない
+      if (isEditing) return;
+
+      // 選択されたノードを取得
+      const selectedNodes = getNodes().filter(n => n.selected);
+      if (selectedNodes.length !== 1) return;
+
+      const selectedNode = selectedNodes[0];
+
+      // Tab キー: 子ノード追加
+      if (e.key === 'Tab' && !e.shiftKey) {
+        e.preventDefault();
+
+        const newNodeId = crypto.randomUUID();
+
+        addNodes([{
+          id: newNodeId,
+          type: "middleNode",
+          data: {
+            label: "new data",
+            parent: selectedNode.id,
+            rank: 0,
+            showChildren: true,
+            display: true,
+            autoEdit: true
+          },
+          position: { x: 0, y: 0 },
+          selected: true
+        }]);
+
+        // 子ノードを追加したら、親ノードの子要素表示を有効にする
+        updateNodeData(selectedNode.id, {
+          ...selectedNode.data,
+          showChildren: true
+        });
+
+        // 新しいノードを自動的に編集モードにするためのイベントを発火
+        setTimeout(() => {
+          const editEvent = new CustomEvent('autoEditNode', {
+            detail: { nodeId: newNodeId }
+          });
+          window.dispatchEvent(editEvent);
+        }, 100);
       }
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        handleAddNode(selectedNodes, "parallel");
+
+      // Enter キー: 兄弟ノード追加
+      if (e.key === 'Enter') {
+        e.preventDefault();
+
+        const newNodeId = crypto.randomUUID();
+        const nodeData = selectedNode.data as NodeData;
+
+        addNodes([{
+          id: newNodeId,
+          type: "middleNode",
+          data: {
+            label: "new data",
+            parent: nodeData.parent,
+            rank: nodeData.rank !== undefined ? nodeData.rank + 0.5 : 0,
+            showChildren: true,
+            display: true,
+            autoEdit: true
+          },
+          position: { x: 0, y: 0 },
+          selected: true
+        }]);
+
+        // 新しいノードを自動的に編集モードにするためのイベントを発火
+        setTimeout(() => {
+          const editEvent = new CustomEvent('autoEditNode', {
+            detail: { nodeId: newNodeId }
+          });
+          window.dispatchEvent(editEvent);
+        }, 100);
       }
-    }
-  }, [isEditing, handleAddNode, selectedNodes]);
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isEditing, getNodes, addNodes, updateNodeData]);
 
   // カスタムイベントリスナー - 子ノードの表示状態変更
   useEffect(() => {
     const handleNodeShowChildrenChanged = (event: CustomEvent) => {
       // 変更されたノードのIDと新しい状態を取得
       const { nodeId, showChildren } = event.detail;
-      
+
       // 子ノードの表示状態を更新
       const updatedNodes = updateChildNodesDisplay(nodeId, showChildren, nodes);
-      
+
       // レイアウトを再計算
       const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
         updatedNodes,
         'LR',
         getNode
       );
-      
+
       // 更新されたノードとエッジを設定
       setNodes(layoutedNodes);
       setEdges(layoutedEdges);
     };
-    
+
     // イベントリスナーを登録
     window.addEventListener('nodeShowChildrenChanged', handleNodeShowChildrenChanged as EventListener);
-    
+
     // クリーンアップ
     return () => {
       window.removeEventListener('nodeShowChildrenChanged', handleNodeShowChildrenChanged as EventListener);
@@ -306,15 +332,15 @@ const Flow = () => {
         'LR',
         getNode
       );
-      
+
       // 更新されたノードとエッジを設定
       setNodes(layoutedNodes);
       setEdges(layoutedEdges);
     };
-    
+
     // イベントリスナーを登録
     window.addEventListener('forceLayoutRefresh', handleForceLayoutRefresh);
-    
+
     // クリーンアップ
     return () => {
       window.removeEventListener('forceLayoutRefresh', handleForceLayoutRefresh);
@@ -329,7 +355,6 @@ const Flow = () => {
         onNodesChange={onNodesChangeWithAutoLayout}
         onEdgesChange={onEdgesChange}
         onSelectionChange={handleSelectionChange}
-        onKeyDown={handleKeyDown}
         nodeTypes={{ middleNode: MiddleNode, lastNode: MiddleNode }}
         nodesDraggable={!isEditing}
         nodeDragThreshold={0}
