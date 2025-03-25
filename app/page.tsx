@@ -202,10 +202,19 @@ const Flow = () => {
     }
   }, [update, onLayout]);
 
-  // 選択変更ハンドラー
-  const handleSelectionChange = useCallback(() => {
-    // 何もしない
-  }, []);
+  // 選択変更ハンドラー - 複数選択を防止
+  const handleSelectionChange = useCallback((params: { nodes: Node[] }) => {
+    // 複数のノードが選択された場合、最後に選択されたノードのみを選択状態にする
+    if (params.nodes.length > 1) {
+      const lastSelectedNode = params.nodes[params.nodes.length - 1];
+      
+      // 他のノードの選択を解除
+      setNodes(nodes => nodes.map(node => ({
+        ...node,
+        selected: node.id === lastSelectedNode.id
+      })));
+    }
+  }, [setNodes]);
 
   // キーボードショートカットの処理
   useEffect(() => {
@@ -362,6 +371,8 @@ const Flow = () => {
         fitView={true}
         selectionKeyCode={null}
         multiSelectionKeyCode={null}
+        selectNodesOnDrag={false}
+        selectionOnDrag={false}
       >
         <Panel position="top-right">
           <div className='flex gap-2'>

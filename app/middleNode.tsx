@@ -8,17 +8,37 @@ import RichTextEditor, { EditorToolbar } from "./components/RichTextEditor";
 
 // ノードコンポーネント
 export const MiddleNode = ({ ...node }) => {
-    // すべてのフックを最初に定義
+    // 状態管理
     const [isDisplayed, setIsDisplayed] = useState(true);
     const [label, setLabel] = useState(node.data.label);
     const [editorState, setEditorState] = useState(node.data.editorState || '');
-    const [showChildren, setShowChildren] = useState(node.data.showChildren !== false); // デフォルトはtrue
-    const { updateNodeData, addNodes, getNodes } = useReactFlow();
-    const { isEditing: globalIsEditing, setIsEditing: globalSetIsEditingContext } = useContext(MindMapContext);
+    const [showChildren, setShowChildren] = useState(node.data.showChildren !== false);
     const [isEditing, setIsEditing] = useState(false);
     const [editor, setEditor] = useState<LexicalEditorType | null>(null);
-    const editorRef = useRef<HTMLDivElement | null>(null);
     const [hasChildNodes, setHasChildNodes] = useState(false);
+    
+    // 参照
+    const editorRef = useRef<HTMLDivElement | null>(null);
+    
+    // コンテキストとフック
+    const { updateNodeData, addNodes, getNodes } = useReactFlow();
+    const { 
+        isEditing: globalIsEditing, 
+        setIsEditing: globalSetIsEditingContext,
+        currentEditingNodeId,
+        setCurrentEditingNodeId
+    } = useContext(MindMapContext);
+
+    // 計算値
+    const isNodeEditing = isEditing || (globalIsEditing && node.selected);
+    
+    // ハンドルのスタイル
+    const handleStyle = {
+        width: 0,
+        height: 0,
+        backgroundColor: 'transparent',
+        border: 'none',
+    };
 
     // 表示状態の更新
     useEffect(() => {
@@ -42,24 +62,72 @@ export const MiddleNode = ({ ...node }) => {
 
         checkChildren();
 
-        // ReactFlowインスタンスの変更を監視
-        const interval = setInterval(checkChildren, 1000);
+        // ReactFlowインスタンスの変更を監視（頻度を下げる）
+        const interval = setInterval(checkChildren, 2000);
         return () => clearInterval(interval);
     }, [getNodes, node.id]);
 
-    // 編集モードの切り替え
+    // エディタにフォーカスを設定する共通関数
+    const focusEditor = useCallback(() => {
+        setTimeout(() => {
+            if (editorRef.current) {
+                const editorElement = editorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
+                if (editorElement) {
+                    // フォーカスを設定
+                    editorElement.focus();
+                    
+                    // テキスト全体を選択
+                    const selection = window.getSelection();
+                    const range = document.createRange();
+                    range.selectNodeContents(editorElement);
+                    selection?.removeAllRanges();
+                    selection?.addRange(range);
+                }
+            }
+        }, 100);
+    }, []);
+
+    // 編集モードの開始
     const onEdit = useCallback(() => {
         if (!isDisplayed) return;
+        
+        // 既に他のノードが編集中の場合、そのノードの編集を終了させる
+        if (globalIsEditing && currentEditingNodeId !== null && currentEditingNodeId !== node.id) {
+            // 現在編集中のノードの編集を終了させるイベントを発火
+            const endEditEvent = new CustomEvent('endNodeEdit', {
+                detail: { nodeId: currentEditingNodeId }
+            });
+            window.dispatchEvent(endEditEvent);
+            
+            // 少し待ってから編集モードを開始
+            setTimeout(() => {
+                setIsEditing(true);
+                globalSetIsEditingContext(true);
+                setCurrentEditingNodeId(node.id);
+                focusEditor();
+            }, 10);
+            return;
+        }
+        
         setIsEditing(true);
         globalSetIsEditingContext(true);
-    }, [globalSetIsEditingContext, isDisplayed]);
+        setCurrentEditingNodeId(node.id);
+        focusEditor();
+    }, [globalIsEditing, currentEditingNodeId, globalSetIsEditingContext, isDisplayed, node.id, setCurrentEditingNodeId, focusEditor]);
 
+    // 編集モードの終了
     const offEdit = useCallback(() => {
         if (!isDisplayed) return;
+        
+        // このノードが現在編集中のノードである場合のみグローバル状態をリセット
+        if (currentEditingNodeId === node.id) {
+            globalSetIsEditingContext(false);
+            setCurrentEditingNodeId(null);
+        }
+        
         setIsEditing(false);
-        globalSetIsEditingContext(false);
         updateNodeData(node.id, { label, editorState, showChildren });
-    }, [globalSetIsEditingContext, node.id, label, editorState, showChildren, updateNodeData, isDisplayed]);
+    }, [globalSetIsEditingContext, currentEditingNodeId, node.id, label, editorState, showChildren, updateNodeData, isDisplayed, setCurrentEditingNodeId]);
 
     // エディタの変更を処理
     const handleEditorChange = useCallback((newText: string, newState: string) => {
@@ -67,42 +135,8 @@ export const MiddleNode = ({ ...node }) => {
         setEditorState(newState);
     }, []);
 
-    // 子要素の表示・非表示を切り替え
-    const toggleChildren = useCallback((e: React.MouseEvent) => {
-        e.stopPropagation(); // イベントの伝播を止める
-        const newShowChildren = !showChildren;
-
-        // 状態を更新
-        setShowChildren(newShowChildren);
-
-        // ノードデータを更新
-        updateNodeData(node.id, {
-            ...node.data,
-            showChildren: newShowChildren,
-            _updated: Date.now() // 強制的に更新を検知させるためのタイムスタンプ
-        });
-
-        // カスタムイベントを発火
-        const event = new CustomEvent('nodeShowChildrenChanged', {
-            detail: {
-                nodeId: node.id,
-                showChildren: newShowChildren,
-                timestamp: Date.now() // イベントの一意性を確保
-            }
-        });
-        window.dispatchEvent(event);
-
-        // 直接レイアウト再計算を要求
-        setTimeout(() => {
-            const refreshEvent = new CustomEvent('forceLayoutRefresh', {
-                detail: { timestamp: Date.now() }
-            });
-            window.dispatchEvent(refreshEvent);
-        }, 50);
-    }, [node.id, node.data, showChildren, updateNodeData]);
-
-    // 新しいノードを追加
-    const addSiblingNode = useCallback(() => {
+    // 新しいノードを作成する共通関数
+    const createNewNode = useCallback((parentId: string, rank: number) => {
         const newNodeId = crypto.randomUUID();
         
         addNodes([{
@@ -110,11 +144,11 @@ export const MiddleNode = ({ ...node }) => {
             type: "middleNode",
             data: {
                 label: "new data",
-                parent: node.data.parent,
-                rank: node.data.rank + 0.5,
+                parent: parentId,
+                rank: rank,
                 showChildren: true,
                 display: true,
-                autoEdit: true // 自動編集モードのフラグを追加
+                autoEdit: true
             },
             position: { x: 0, y: 0 },
             selected: true
@@ -127,8 +161,16 @@ export const MiddleNode = ({ ...node }) => {
             });
             window.dispatchEvent(editEvent);
         }, 100);
-    }, [addNodes, node.data.parent, node.data.rank]);
+        
+        return newNodeId;
+    }, [addNodes]);
 
+    // 兄弟ノードの追加
+    const addSiblingNode = useCallback(() => {
+        createNewNode(node.data.parent, node.data.rank + 0.5);
+    }, [createNewNode, node.data]);
+
+    // 子ノードの追加
     const addChildNode = useCallback(() => {
         // 子ノードを追加するときに親ノードの子要素表示を有効にする
         if (!showChildren) {
@@ -139,100 +181,64 @@ export const MiddleNode = ({ ...node }) => {
             });
         }
 
-        const newNodeId = crypto.randomUUID();
+        createNewNode(node.id, 0);
         
-        addNodes([{
-            id: newNodeId,
-            type: "middleNode",
-            data: {
-                label: "new data",
-                parent: node.id,
-                rank: 0,
-                showChildren: true,
-                display: true,
-                autoEdit: true // 自動編集モードのフラグを追加
-            },
-            position: { x: 0, y: 0 },
-            selected: true
-        }]);
-
         // 子ノードを追加したら、hasChildNodesを更新
         setHasChildNodes(true);
-        
-        // 新しいノードを自動的に編集モードにするためのイベントを発火
+    }, [createNewNode, node.id, showChildren, updateNodeData, node.data]);
+
+    // 子要素の表示・非表示を切り替え
+    const toggleChildren = useCallback((e: React.MouseEvent) => {
+        e.stopPropagation();
+        const newShowChildren = !showChildren;
+
+        // 状態を更新
+        setShowChildren(newShowChildren);
+
+        // ノードデータを更新
+        updateNodeData(node.id, {
+            ...node.data,
+            showChildren: newShowChildren,
+            _updated: Date.now()
+        });
+
+        // カスタムイベントを発火
+        const event = new CustomEvent('nodeShowChildrenChanged', {
+            detail: {
+                nodeId: node.id,
+                showChildren: newShowChildren,
+                timestamp: Date.now()
+            }
+        });
+        window.dispatchEvent(event);
+
+        // レイアウト再計算を要求
         setTimeout(() => {
-            const editEvent = new CustomEvent('autoEditNode', {
-                detail: { nodeId: newNodeId }
+            const refreshEvent = new CustomEvent('forceLayoutRefresh', {
+                detail: { timestamp: Date.now() }
             });
-            window.dispatchEvent(editEvent);
-        }, 100);
-    }, [addNodes, node.id, showChildren, node.data, updateNodeData]);
+            window.dispatchEvent(refreshEvent);
+        }, 50);
+    }, [node.id, node.data, showChildren, updateNodeData]);
 
-    // 編集モードかどうか
-    const isNodeEditing = isEditing || (globalIsEditing && node.selected);
-
-    // ハンドルのスタイル
-    const handleStyle = {
-        width: 0,
-        height: 0,
-        backgroundColor: 'transparent',
-        border: 'none',
-    };
-
-    // 自動編集モードの処理を追加
+    // 自動編集モードの処理
     useEffect(() => {
         // 自動編集モードのイベントリスナー
         const handleAutoEdit = (event: CustomEvent<{nodeId: string}>) => {
             if (event.detail.nodeId === node.id) {
-                // 編集モードを有効にする
                 onEdit();
-                
-                // エディタにフォーカスを設定
-                setTimeout(() => {
-                    if (editorRef.current) {
-                        const editorElement = editorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
-                        if (editorElement) {
-                            // フォーカスを設定
-                            editorElement.focus();
-                            
-                            // テキストを全選択（または必要に応じてカーソルを最後に配置）
-                            const selection = window.getSelection();
-                            const range = document.createRange();
-                            range.selectNodeContents(editorElement);
-                            selection?.removeAllRanges();
-                            selection?.addRange(range);
-                        }
-                    }
-                }, 200); // タイミングを少し遅らせてエディタが初期化されるのを待つ
             }
         };
 
         // このノードが自動編集フラグを持っている場合、編集モードを有効にする
         if (node.data.autoEdit) {
-            onEdit();
             // フラグをリセット
             updateNodeData(node.id, {
                 ...node.data,
                 autoEdit: false
             });
             
-            // エディタにフォーカスを設定
-            setTimeout(() => {
-                if (editorRef.current) {
-                    const editorElement = editorRef.current.querySelector('[contenteditable="true"]') as HTMLElement;
-                    if (editorElement) {
-                        // フォーカスを設定
-                        editorElement.focus();
-                        
-                        // テキスト全体を選択
-                        const selection = window.getSelection();
-                        const range = document.createRange();
-                        range.selectNodeContents(editorElement);
-                        selection?.removeAllRanges();
-                        selection?.addRange(range);
-                    }
-                }
-            }, 200); // タイミングを少し遅らせてエディタが初期化されるのを待つ
+            onEdit();
         }
 
         // イベントリスナーを登録
@@ -243,6 +249,23 @@ export const MiddleNode = ({ ...node }) => {
         };
     }, [node.id, node.data, onEdit, updateNodeData]);
 
+    // 編集終了イベントのリスナー
+    useEffect(() => {
+        const handleEndEdit = (event: CustomEvent<{nodeId: string}>) => {
+            if (event.detail.nodeId === node.id) {
+                // このノードの編集を終了
+                setIsEditing(false);
+                updateNodeData(node.id, { label, editorState, showChildren });
+            }
+        };
+        
+        window.addEventListener('endNodeEdit', handleEndEdit as EventListener);
+        
+        return () => {
+            window.removeEventListener('endNodeEdit', handleEndEdit as EventListener);
+        };
+    }, [node.id, label, editorState, showChildren, updateNodeData]);
+
     // 非表示の場合は何も描画しない
     if (!isDisplayed) {
         return null;
@@ -252,30 +275,31 @@ export const MiddleNode = ({ ...node }) => {
         <div
             onDoubleClick={onEdit}
             className={`group ${isNodeEditing ? 'cursor-text' : 'cursor-default'}`}>
-            {/* リッチエディタツールバー - 編集モード時のみ表示 */}
+            
+            {/* 非編集モード時のツールバー */}
             <NodeToolbar isVisible={node.selected && !isNodeEditing} position={Position.Top} className="bg-white dark:bg-gray-800 p-1 rounded-md shadow-md border border-gray-200 dark:border-gray-700">
                 <div className="flex items-center gap-1">
                     <button
                         onClick={onEdit}
-                        className={`p-2 rounded hover:bg-gray-200 transition-colors hover:cursor-pointer`}>
+                        className="p-2 rounded hover:bg-gray-200 transition-colors hover:cursor-pointer">
                         <Pencil className="w-3 h-3 text-gray-800" />
                     </button>
                     <button
                         onClick={() => { }}
-                        className={`p-2 rounded bg-red-500/50 text-white transition-colors hover:cursor-pointer`}>
+                        className="p-2 rounded bg-red-500/50 text-white transition-colors hover:cursor-pointer">
                         <Trash className="w-3 h-3" />
                     </button>
                 </div>
             </NodeToolbar>
 
-            {/* リッチエディタツールバー - 編集モード時のみ表示 */}
+            {/* 編集モード時のツールバー */}
             <NodeToolbar isVisible={isNodeEditing} position={Position.Top} className="bg-white dark:bg-gray-800 p-1 rounded-md shadow-md border border-gray-200 dark:border-gray-700">
                 <div className="flex items-center gap-1">
                     <EditorToolbar editor={editor} onClose={offEdit} />
                 </div>
             </NodeToolbar>
 
-            {/* 通常のツールバー - 非編集モード時のみ表示 */}
+            {/* 兄弟ノード追加ボタン */}
             <NodeToolbar isVisible={node.selected && !isNodeEditing} position={Position.Bottom}>
                 <button
                     onClick={addSiblingNode}
@@ -284,7 +308,7 @@ export const MiddleNode = ({ ...node }) => {
                 </button>
             </NodeToolbar>
 
-            {/* 子要素の表示・非表示を切り替えるボタンを含むツールバー */}
+            {/* 子要素の表示・非表示を切り替えるボタン */}
             <NodeToolbar position={Position.Right} isVisible className="flex gap-2 items-center">
                 {hasChildNodes ? (
                     <button
@@ -312,6 +336,7 @@ export const MiddleNode = ({ ...node }) => {
                 )}
             </NodeToolbar>
 
+            {/* ノードの内容 */}
             <div
                 className={`w-full text-[8px] relative bg-zinc-50 dark:bg-blue-900/10 text-card-foreground px-2 inline-block border rounded-md p-2 
                     ${isNodeEditing ? 'hover:cursor-text border-emerald-500' : `${node.selected ? 'border-blue-500' : 'border-transparent'}`}
@@ -333,8 +358,8 @@ export const MiddleNode = ({ ...node }) => {
                             <RichTextEditor
                                 initialValue={label}
                                 initialState={editorState}
-                                onSave={() => { }}
-                                onBlur={() => { }}
+                                onSave={() => {}}
+                                onBlur={() => {}}
                                 isEditing={false}
                             />
                         ) : (
@@ -343,6 +368,8 @@ export const MiddleNode = ({ ...node }) => {
                     </div>
                 )}
             </div>
+            
+            {/* ハンドル */}
             <Handle
                 type="target"
                 position={Position.Left}
@@ -355,6 +382,6 @@ export const MiddleNode = ({ ...node }) => {
                 style={handleStyle}
                 isConnectable={false}
             />
-        </div >
+        </div>
     );
 };
