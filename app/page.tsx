@@ -167,7 +167,7 @@ const Flow = () => {
   const { getNode, getNodes, addNodes, updateNodeData } = useReactFlow();
   const [nodes, setNodes] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const { isEditing } = useContext(MindMapContext);
+  const { isEditing, currentEditingNodeId, setIsEditing, setCurrentEditingNodeId } = useContext(MindMapContext);
   const [update, setUpdate] = useState(false);
 
   // レイアウト方向の変更
@@ -356,6 +356,34 @@ const Flow = () => {
     };
   }, [nodes, getNode, setNodes, setEdges]);
 
+  // 背景クリックで編集モードを終了
+  const onPaneClick = useCallback(() => {
+    // 編集中のノードがある場合、編集を終了
+    if (isEditing && currentEditingNodeId) {
+        const endEditEvent = new CustomEvent('endNodeEdit', {
+            detail: { nodeId: currentEditingNodeId }
+        });
+        window.dispatchEvent(endEditEvent);
+        setIsEditing(false);
+        setCurrentEditingNodeId(null);
+    }
+  }, [isEditing, currentEditingNodeId, setIsEditing, setCurrentEditingNodeId]);
+
+  // 初期レンダリング後にビューをフィットさせる
+  const reactFlowInstance = useReactFlow();
+
+  useEffect(() => {
+    // 少し遅延させてノードが正しく配置された後にフィットさせる
+    const timer = setTimeout(() => {
+      reactFlowInstance.fitView({
+        padding: 0.2,
+        includeHiddenNodes: false
+      });
+    }, 50);
+    
+    return () => clearTimeout(timer);
+  }, [reactFlowInstance]);
+
   return (
     <div style={{ height: '100vh', width: '100vw' }}>
       <ReactFlow
@@ -364,11 +392,19 @@ const Flow = () => {
         onNodesChange={onNodesChangeWithAutoLayout}
         onEdgesChange={onEdgesChange}
         onSelectionChange={handleSelectionChange}
+        onPaneClick={onPaneClick}
         nodeTypes={{ middleNode: MiddleNode, lastNode: MiddleNode }}
         nodesDraggable={!isEditing}
         nodeDragThreshold={0}
         panOnDrag={!isEditing}
         fitView={true}
+        fitViewOptions={{ 
+          padding: 0.2,  // ビューの余白を設定
+          includeHiddenNodes: false,  // 非表示ノードを除外
+          minZoom: 0.5,  // 最小ズームレベル
+          maxZoom: 1.5   // 最大ズームレベル
+        }}
+        defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}  // デフォルトのビューポート設定
         selectionKeyCode={null}
         multiSelectionKeyCode={null}
         selectNodesOnDrag={false}

@@ -266,6 +266,27 @@ export const MiddleNode = ({ ...node }) => {
         };
     }, [node.id, label, editorState, showChildren, updateNodeData]);
 
+    // 外部クリックで編集モードを終了するイベントリスナー
+    useEffect(() => {
+        // 編集モード中のみイベントリスナーを設定
+        if (isEditing) {
+            const handleOutsideClick = (e: MouseEvent) => {
+                // クリックされた要素がこのノードの子孫でない場合
+                if (editorRef.current && !editorRef.current.contains(e.target as Node)) {
+                    // 編集モードを終了
+                    offEdit();
+                }
+            };
+
+            // キャプチャフェーズでイベントをリッスン（バブリングより先に実行される）
+            document.addEventListener('click', handleOutsideClick, true);
+            
+            return () => {
+                document.removeEventListener('click', handleOutsideClick, true);
+            };
+        }
+    }, [isEditing, offEdit]);
+
     // 非表示の場合は何も描画しない
     if (!isDisplayed) {
         return null;
