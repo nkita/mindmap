@@ -384,6 +384,37 @@ const Flow = () => {
     return () => clearTimeout(timer);
   }, [reactFlowInstance]);
 
+  // ノード削除イベントのリスナー
+  useEffect(() => {
+    const handleDeleteNodes = (event: CustomEvent<{changes: NodeChange[]}>) => {
+        // 削除変更を適用
+        const { changes } = event.detail;
+        console.log('Received delete changes:', changes);
+        
+        // 削除処理を実行
+        onNodesChangeWithAutoLayout(changes);
+        
+        // 少し遅延させてからレイアウトを更新
+        setTimeout(() => {
+            const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
+                nodes.filter(n => !changes.some(change => 
+                    change.type === 'remove' && change.id === n.id
+                )),
+                'LR',
+                getNode
+            );
+            setNodes(layoutedNodes);
+            setEdges(layoutedEdges);
+        }, 50);
+    };
+    
+    window.addEventListener('deleteNodes', handleDeleteNodes as EventListener);
+    
+    return () => {
+        window.removeEventListener('deleteNodes', handleDeleteNodes as EventListener);
+    };
+  }, [onNodesChangeWithAutoLayout, nodes, getNode, setNodes, setEdges]);
+
   return (
     <div style={{ height: '100vh', width: '100vw' }}>
       <ReactFlow

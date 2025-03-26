@@ -287,6 +287,44 @@ export const MiddleNode = ({ ...node }) => {
         }
     }, [isEditing, offEdit]);
 
+    // 削除ボタンの処理を追加
+    const handleDelete = useCallback(() => {
+        // 削除対象のノードIDを収集
+        const nodesToDelete = collectNodesToDelete(node.id, getNodes());
+        
+        // ReactFlowの標準機能を使用してノードを削除
+        const deleteChanges = nodesToDelete.map(id => ({
+            type: 'remove' as const,
+            id
+        }));
+        
+        // 削除変更を適用
+        const customEvent = new CustomEvent('deleteNodes', {
+            detail: { changes: deleteChanges }
+        });
+        window.dispatchEvent(customEvent);
+        
+        // コンソールに削除情報を出力（デバッグ用）
+        console.log('Deleting nodes:', nodesToDelete);
+    }, [node.id, getNodes]);
+
+    // 削除対象のノードを収集する関数
+    const collectNodesToDelete = (nodeId: string, allNodes: { id: string; data: { parent?: string } }[]): string[] => {
+        const result: string[] = [nodeId];
+        
+        // 子ノードを再帰的に収集
+        const collectChildren = (parentId: string) => {
+            const children = allNodes.filter(n => n.data && n.data.parent === parentId);
+            children.forEach(child => {
+                result.push(child.id);
+                collectChildren(child.id);
+            });
+        };
+        
+        collectChildren(nodeId);
+        return result;
+    };
+
     // 非表示の場合は何も描画しない
     if (!isDisplayed) {
         return null;
@@ -306,7 +344,7 @@ export const MiddleNode = ({ ...node }) => {
                         <Pencil className="w-3 h-3 text-gray-800" />
                     </button>
                     <button
-                        onClick={() => { }}
+                        onClick={handleDelete}
                         className="p-2 rounded bg-red-500/50 text-white transition-colors hover:cursor-pointer">
                         <Trash className="w-3 h-3" />
                     </button>
