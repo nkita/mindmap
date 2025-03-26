@@ -357,15 +357,29 @@ const Flow = () => {
   }, [nodes, getNode, setNodes, setEdges]);
 
   // 背景クリックで編集モードを終了
-  const onPaneClick = useCallback(() => {
+  const onPaneClick = useCallback((event: React.MouseEvent) => {
+    // ツールバー内のクリックかどうかをチェック
+    const target = event.target as HTMLElement;
+    const isToolbarClick = 
+      target.closest('.editor-toolbar') || 
+      target.closest('.node-toolbar') ||
+      target.closest('[data-toolbar-button="true"]') ||
+      target.closest('[data-lexical-editor="true"]');
+    
+    // ツールバークリックの場合は何もしない
+    if (isToolbarClick) {
+      event.stopPropagation();
+      return;
+    }
+    
     // 編集中のノードがある場合、編集を終了
     if (isEditing && currentEditingNodeId) {
-        const endEditEvent = new CustomEvent('endNodeEdit', {
-            detail: { nodeId: currentEditingNodeId }
-        });
-        window.dispatchEvent(endEditEvent);
-        setIsEditing(false);
-        setCurrentEditingNodeId(null);
+      const endEditEvent = new CustomEvent('endNodeEdit', {
+        detail: { nodeId: currentEditingNodeId }
+      });
+      window.dispatchEvent(endEditEvent);
+      setIsEditing(false);
+      setCurrentEditingNodeId(null);
     }
   }, [isEditing, currentEditingNodeId, setIsEditing, setCurrentEditingNodeId]);
 
@@ -389,7 +403,6 @@ const Flow = () => {
     const handleDeleteNodes = (event: CustomEvent<{changes: NodeChange[]}>) => {
         // 削除変更を適用
         const { changes } = event.detail;
-        console.log('Received delete changes:', changes);
         
         // 削除処理を実行
         onNodesChangeWithAutoLayout(changes);

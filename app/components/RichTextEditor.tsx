@@ -159,11 +159,6 @@ function EditorValuePlugin({ initialValue, initialState, onSave, onBlur, isEditi
       }
     };
 
-    const handleBlur = () => {
-      // Escapeキーでのブラーのみを処理するため、ここでは何もしない
-      return;
-    };
-
     // グローバルフラグを設定する関数を公開
     window.setIsHandlingPopover = (value: boolean) => {
       isHandlingPopover.current = value;
@@ -177,10 +172,8 @@ function EditorValuePlugin({ initialValue, initialState, onSave, onBlur, isEditi
     return editor.registerRootListener((rootElement) => {
       if (rootElement) {
         rootElement.addEventListener('keydown', handleKeyDown);
-        rootElement.addEventListener('blur', handleBlur, true);
         return () => {
           rootElement.removeEventListener('keydown', handleKeyDown);
-          rootElement.removeEventListener('blur', handleBlur, true);
           if (blurTimeoutRef.current) {
             clearTimeout(blurTimeoutRef.current);
           }
@@ -244,7 +237,10 @@ function FormatButton({ editor, format, icon }: {
 
   return (
     <button
-      onMouseDown={(e) => e.preventDefault()}
+      onMouseDown={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
       onClick={onFormatClick}
       className="p-2 rounded hover:cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
       title={format}
@@ -257,7 +253,7 @@ function FormatButton({ editor, format, icon }: {
 // ツールバーコンポーネント
 export function EditorToolbar({ editor, onClose }: {
   editor: LexicalEditorType | null,
-  onClose?: () => void
+  onClose?: (() => void) | null
 }) {
   const [formatState, setFormatState] = useState({
     isBold: false,
@@ -361,7 +357,7 @@ export function EditorToolbar({ editor, onClose }: {
   };
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center gap-1 editor-toolbar">
       <FormatButton editor={editor} format="bold" icon={<Bold className="w-3 h-3" />} />
       <FormatButton editor={editor} format="italic" icon={<Italic className="w-3 h-3" />} />
       <FormatButton editor={editor} format="underline" icon={<Underline className="w-3 h-3" />} />
