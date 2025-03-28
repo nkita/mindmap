@@ -17,11 +17,86 @@ import {
 } from '@xyflow/react';
 
 import '@xyflow/react/dist/style.css';
-import { initialNodes } from './initialElements';
 import { MiddleNode } from './middleNode';
 import { MindMapProvider, MindMapContext } from './provider';
 import { getLayoutedElements, NodeData } from './helper-custom-layout';
 import { recalculateRanks, sortNodesByRank, traverseHierarchy } from './helper-node-sort';
+
+// IndexedDBの初期化と操作関数
+const initializeDB = () => {
+  return new Promise<IDBDatabase>((resolve) => {
+    const request = indexedDB.open('mindmap-db', 1);
+
+
+    request.onsuccess = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      resolve(db);
+    };
+
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains('mindmaps')) {
+        db.createObjectStore('mindmaps', { keyPath: 'id' });
+      }
+    };
+  });
+};
+
+// マインドマップデータの保存
+const saveMindmap = async (id: string, nodes: Node[]) => {
+  const db = await initializeDB();
+  return new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(['mindmaps'], 'readwrite');
+    const store = transaction.objectStore('mindmaps');
+
+    const request = store.put({
+      id,
+      nodes,
+      updatedAt: new Date().toISOString()
+    });
+
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject('マインドマップの保存に失敗しました');
+
+    transaction.oncomplete = () => db.close();
+  });
+};
+
+// マインドマップデータの取得
+const loadMindmap = async (id: string): Promise<Node[]> => {
+  const db = await initializeDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(['mindmaps'], 'readonly');
+    const store = transaction.objectStore('mindmaps');
+
+    const request = store.get(id);
+
+    request.onsuccess = () => {
+      const data = request.result;
+      if (data) {
+        resolve(data.nodes);
+      } else {
+        // デフォルトのルートノード
+        resolve([{
+          id: 'root',
+          type: 'middleNode',
+          data: {
+            label: 'マインドマップ',
+            parent: null,
+            rank: 0,
+            showChildren: true,
+            display: true
+          },
+          position: { x: 0, y: 0 }
+        }]);
+      }
+    };
+
+    request.onerror = () => reject('マインドマップの読み込みに失敗しました');
+
+    transaction.oncomplete = () => db.close();
+  });
+};
 
 // ノード変更時のハンドラー
 const handleNodeChanges = (
@@ -165,10 +240,60 @@ const updateChildNodesDisplay = (
 // Flowコンポーネント
 const Flow = () => {
   const { getNode, getNodes, addNodes, updateNodeData } = useReactFlow();
-  const [nodes, setNodes] = useNodesState(initialNodes);
+  const [nodes, setNodes] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const { isEditing, currentEditingNodeId, setIsEditing, setCurrentEditingNodeId } = useContext(MindMapContext);
   const [update, setUpdate] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // IndexedDBからデータを読み込む
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setIsLoading(true);
+        const loadedNodes = await loadMindmap('default');
+        setNodes(loadedNodes);
+
+        // レイアウトを計算
+        setTimeout(() => {
+          const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
+            loadedNodes,
+            'LR',
+            getNode
+          );
+
+          setNodes(layoutedNodes);
+          setEdges(layoutedEdges);
+          setIsLoading(false);
+        }, 200); // 100ms遅延させてレイアウト計算を行う
+      } catch (error) {
+        console.error('データの読み込みに失敗しました:', error);
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, [getNode, setNodes, setEdges]);
+
+  // ノードが変更されたらIndexedDBに保存
+  useEffect(() => {
+    if (nodes.length > 0 && !isLoading) {
+      const saveData = async () => {
+        try {
+          await saveMindmap('default', nodes);
+        } catch (error) {
+          console.error('データの保存に失敗しました:', error);
+        }
+      };
+
+      // 変更があった場合のみ保存（デバウンス処理）
+      const timer = setTimeout(() => {
+        saveData();
+      }, 500);
+
+      return () => clearTimeout(timer);
+    }
+  }, [nodes, isLoading]);
 
   // レイアウト方向の変更
   const onLayout = useCallback(
@@ -207,7 +332,7 @@ const Flow = () => {
     // 複数のノードが選択された場合、最後に選択されたノードのみを選択状態にする
     if (params.nodes.length > 1) {
       const lastSelectedNode = params.nodes[params.nodes.length - 1];
-      
+
       // 他のノードの選択を解除
       setNodes(nodes => nodes.map(node => ({
         ...node,
@@ -360,18 +485,18 @@ const Flow = () => {
   const onPaneClick = useCallback((event: React.MouseEvent) => {
     // ツールバー内のクリックかどうかをチェック
     const target = event.target as HTMLElement;
-    const isToolbarClick = 
-      target.closest('.editor-toolbar') || 
+    const isToolbarClick =
+      target.closest('.editor-toolbar') ||
       target.closest('.node-toolbar') ||
       target.closest('[data-toolbar-button="true"]') ||
       target.closest('[data-lexical-editor="true"]');
-    
+
     // ツールバークリックの場合は何もしない
     if (isToolbarClick) {
       event.stopPropagation();
       return;
     }
-    
+
     // 編集中のノードがある場合、編集を終了
     if (isEditing && currentEditingNodeId) {
       const endEditEvent = new CustomEvent('endNodeEdit', {
@@ -385,48 +510,65 @@ const Flow = () => {
 
   // 初期レンダリング後にビューをフィットさせる
   const reactFlowInstance = useReactFlow();
+  const [initialRenderComplete, setInitialRenderComplete] = useState(false);
 
   useEffect(() => {
-    // 少し遅延させてノードが正しく配置された後にフィットさせる
-    const timer = setTimeout(() => {
-      reactFlowInstance.fitView({
-        padding: 0.2,
-        includeHiddenNodes: false
-      });
-    }, 50);
-    
-    return () => clearTimeout(timer);
-  }, [reactFlowInstance]);
+    // 初期レンダリング時のみ実行
+    if (!initialRenderComplete && !isLoading && nodes.length > 0) {
+      // 少し遅延させてノードが正しく配置された後にフィットさせる
+      const timer = setTimeout(() => {
+        // レイアウトを再計算
+        onLayout('LR');
+        
+        // その後ビューをフィット
+        reactFlowInstance.fitView({
+          padding: 0.2,
+          includeHiddenNodes: false
+        });
+        
+        // 初期レンダリング完了をマーク
+        setInitialRenderComplete(true);
+      }, 50);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [reactFlowInstance, onLayout, initialRenderComplete, isLoading, nodes]);
 
   // ノード削除イベントのリスナー
   useEffect(() => {
-    const handleDeleteNodes = (event: CustomEvent<{changes: NodeChange[]}>) => {
-        // 削除変更を適用
-        const { changes } = event.detail;
-        
-        // 削除処理を実行
-        onNodesChangeWithAutoLayout(changes);
-        
-        // 少し遅延させてからレイアウトを更新
-        setTimeout(() => {
-            const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
-                nodes.filter(n => !changes.some(change => 
-                    change.type === 'remove' && change.id === n.id
-                )),
-                'LR',
-                getNode
-            );
-            setNodes(layoutedNodes);
-            setEdges(layoutedEdges);
-        }, 50);
+    const handleDeleteNodes = (event: CustomEvent<{ changes: NodeChange[] }>) => {
+      // 削除変更を適用
+      const { changes } = event.detail;
+
+      // 削除処理を実行
+      onNodesChangeWithAutoLayout(changes);
+
+      // 少し遅延させてからレイアウトを更新
+      setTimeout(() => {
+        const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
+          nodes.filter(n => !changes.some(change =>
+            change.type === 'remove' && change.id === n.id
+          )),
+          'LR',
+          getNode
+        );
+        setNodes(layoutedNodes);
+        setEdges(layoutedEdges);
+      }, 50);
     };
-    
+
     window.addEventListener('deleteNodes', handleDeleteNodes as EventListener);
-    
+
     return () => {
-        window.removeEventListener('deleteNodes', handleDeleteNodes as EventListener);
+      window.removeEventListener('deleteNodes', handleDeleteNodes as EventListener);
     };
   }, [onNodesChangeWithAutoLayout, nodes, getNode, setNodes, setEdges]);
+
+  if (isLoading) {
+    return <div className="flex items-center justify-center h-screen w-screen">
+      <div className="text-2xl">マインドマップを読み込み中...</div>
+    </div>;
+  }
 
   return (
     <div style={{ height: '100vh', width: '100vw' }}>
@@ -442,13 +584,13 @@ const Flow = () => {
         nodeDragThreshold={0}
         panOnDrag={!isEditing}
         fitView={true}
-        fitViewOptions={{ 
-          padding: 0.2,  // ビューの余白を設定
-          includeHiddenNodes: false,  // 非表示ノードを除外
-          minZoom: 0.5,  // 最小ズームレベル
-          maxZoom: 1.5   // 最大ズームレベル
+        fitViewOptions={{
+          padding: 0.2,
+          includeHiddenNodes: false,
+          minZoom: 0.5,
+          maxZoom: 1.5
         }}
-        defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}  // デフォルトのビューポート設定
+        defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
         selectionKeyCode={null}
         multiSelectionKeyCode={null}
         selectNodesOnDrag={false}
@@ -456,9 +598,9 @@ const Flow = () => {
       >
         <Panel position="top-right">
           <div className='flex gap-2'>
-            <div className='bg-blue-500 text-white p-2 rounded-md'>{isEditing ? "editing" : "viewing"}</div>
-            <button className='bg-blue-500 text-white p-2 rounded-md' onClick={() => onLayout('TB')}>vertical layout</button>
-            <button className='bg-blue-500 text-white p-2 rounded-md' onClick={() => onLayout('LR')}>horizontal layout</button>
+            <div className='bg-blue-500 text-white p-2 rounded-md'>{isEditing ? "編集中" : "閲覧中"}</div>
+            <button className='bg-blue-500 text-white p-2 rounded-md' onClick={() => onLayout('TB')}>縦レイアウト</button>
+            <button className='bg-blue-500 text-white p-2 rounded-md' onClick={() => onLayout('LR')}>横レイアウト</button>
           </div>
         </Panel>
         <Background
