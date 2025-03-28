@@ -58,7 +58,7 @@ export const loadMindmap = async (id: string): Promise<Node[]> => {
           id: 'root',
           type: 'middleNode',
           data: {
-            label: 'マインドマップ',
+            label: 'Mindmap',
             parent: null,
             rank: 0,
             showChildren: true,
@@ -69,7 +69,7 @@ export const loadMindmap = async (id: string): Promise<Node[]> => {
       }
     };
 
-    request.onerror = () => reject('マインドマップの読み込みに失敗しました');
+    request.onerror = () => reject('Failed to load mindmap');
 
     transaction.oncomplete = () => db.close();
   });

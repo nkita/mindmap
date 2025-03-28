@@ -56,7 +56,7 @@ const Flow = () => {
             id: 'root',
             type: 'middleNode',
             data: {
-              label: '新しいマインドマップ',
+              label: 'New Mindmap',
               parent: null,
               rank: 0,
               showChildren: true,
@@ -66,10 +66,10 @@ const Flow = () => {
           };
           
           await saveMindmap('default', [defaultNode]);
-          setMindmapList([{id: 'default', title: '新しいマインドマップ'}]);
+          setMindmapList([{id: 'default', title: 'New Mindmap'}]);
         }
       } catch (error) {
-        console.error('マインドマップリストの読み込みに失敗しました:', error);
+        console.error('Failed to load mindmap list:', error);
       }
     };
     
@@ -107,7 +107,7 @@ const Flow = () => {
   // 新しいマインドマップの作成
   const createNewMindmap = useCallback(async () => {
     const newId = `mindmap-${Date.now()}`;
-    const newTitle = '新しいマインドマップ';
+    const newTitle = 'New Mindmap';
     
     try {
       const rootNode = {
@@ -127,7 +127,7 @@ const Flow = () => {
       setMindmapList(prev => [...prev, {id: newId, title: newTitle}]);
       switchMindmap(newId);
     } catch (error) {
-      console.error('新しいマインドマップの作成に失敗しました:', error);
+      console.error('Failed to create new mindmap:', error);
     }
   }, [switchMindmap]);
 
@@ -452,28 +452,28 @@ const Flow = () => {
           <div className='flex flex-col gap-3 bg-white/80 backdrop-blur-sm p-4 rounded-lg shadow-lg border border-gray-200'>
             <div className='flex items-center gap-3'>
               <div className={`px-3 py-2 rounded-full text-sm font-medium ${isEditing ? "bg-indigo-500 text-white" : "bg-gray-200 text-gray-700"}`}>
-                {isEditing ? "編集モード" : "表示モード"}
+                {isEditing ? "Edit Mode" : "View Mode"}
               </div>
               <button 
                 className='px-3 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-full text-sm font-medium shadow-sm hover:shadow-md transition-all flex items-center gap-1'
                 onClick={createNewMindmap}
               >
                 <Plus size={16} />
-                新規作成
+                Create New
               </button>
               <button 
                 className={`px-3 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-1 ${isListExpanded ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
                 onClick={() => setIsListExpanded(!isListExpanded)}
               >
                 <ChevronDown size={16} className={`transition-transform ${isListExpanded ? 'rotate-180' : ''}`} />
-                マインドマップ一覧
+                Mindmap List
               </button>
             </div>
             
             {isListExpanded && mindmapList.length > 0 && (
               <div className='bg-white rounded-lg shadow-inner border border-gray-100 overflow-hidden'>
                 <div className='p-3 border-b border-gray-100 bg-gray-50'>
-                  <h3 className='text-sm font-semibold text-gray-700'>マインドマップ一覧</h3>
+                  <h3 className='text-sm font-semibold text-gray-700'>Mindmap List</h3>
                 </div>
                 <ul className='max-h-60 overflow-y-auto divide-y divide-gray-100'>
                   {mindmapList.map(item => (
