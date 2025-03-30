@@ -87,13 +87,13 @@ const Flow = () => {
     setIsLoading(true);
     try {
       const loadedNodes = await loadMindmap(id);
-      
+
       // 全てのノードの選択状態をクリア
       const nodesWithoutSelection = loadedNodes.map(node => ({
         ...node,
         selected: false
       }));
-      
+
       setNodes(nodesWithoutSelection);
 
       setTimeout(() => {
@@ -108,12 +108,12 @@ const Flow = () => {
           ...node,
           selected: false
         })));
-        
+
         setEdges(layoutedEdges);
         setCurrentMindmapId(id);
         setIsLoading(false);
         setInitialRenderComplete(false); // 新しいマインドマップのためにリセット
-        
+
         // 少し遅延させてからfitViewを実行
         setTimeout(() => {
           reactFlowInstance.fitView({
@@ -190,13 +190,13 @@ const Flow = () => {
       try {
         setIsLoading(true);
         const loadedNodes = await loadMindmap(currentMindmapId);
-        
+
         // 全てのノードの選択状態をクリア
         const nodesWithoutSelection = loadedNodes.map(node => ({
           ...node,
           selected: false
         }));
-        
+
         setNodes(nodesWithoutSelection);
 
         // レイアウトを計算
@@ -212,7 +212,7 @@ const Flow = () => {
             ...node,
             selected: false
           })));
-          
+
           setEdges(layoutedEdges);
           setIsLoading(false);
         }, 200);
@@ -238,16 +238,8 @@ const Flow = () => {
       setNodes([...layoutedNodes]);
       setEdges([...layoutedEdges]);
 
-      // レイアウト適用後に全ノードが表示されるようにビューを調整
-      setTimeout(() => {
-        reactFlowInstance.fitView({
-          padding: 0.3,
-          includeHiddenNodes: false,
-          duration: 500
-        });
-      }, 100);
     },
-    [nodes, getNode, setNodes, setEdges, reactFlowInstance]
+    [nodes, getNode, setNodes, setEdges]
   );
 
   // ノード変更ハンドラー
@@ -449,11 +441,13 @@ const Flow = () => {
         onLayout('LR');
 
         // 全ノードが表示されるようにビューを調整
-        reactFlowInstance.fitView({
-          padding: 0.3, // 余白を設定
-          includeHiddenNodes: false, // 非表示ノードは除外
-          duration: 800 // アニメーション時間（ミリ秒）
-        });
+        setTimeout(() => {
+          reactFlowInstance.fitView({
+            padding: 0.3, // 余白を設定
+            includeHiddenNodes: false, // 非表示ノードは除外
+            duration: 800 // アニメーション時間（ミリ秒）
+          })
+        }, 50);
         setInitialRenderComplete(true);
       }, 50);
 
