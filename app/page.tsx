@@ -20,15 +20,15 @@ import { MiddleNode } from './middleNode';
 import { MindMapProvider, MindMapContext } from './provider';
 import { getLayoutedElements, NodeData } from './helper-custom-layout';
 import { Plus, ChevronDown, BookOpen, Trash2 } from 'lucide-react';
-import { 
-  saveMindmap, 
-  loadMindmap, 
+import {
+  saveMindmap,
+  loadMindmap,
   getMindmapList,
   deleteMindmapFromDB
 } from './db-service';
-import { 
-  handleNodeChanges, 
-  updateChildNodesDisplay 
+import {
+  handleNodeChanges,
+  updateChildNodesDisplay
 } from './node-operations';
 
 // Flowコンポーネント
@@ -40,9 +40,12 @@ const Flow = () => {
   const [update, setUpdate] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [currentMindmapId, setCurrentMindmapId] = useState('default');
-  const [mindmapList, setMindmapList] = useState<{id: string, title: string}[]>([]);
+  const [mindmapList, setMindmapList] = useState<{ id: string, title: string }[]>([]);
   const [isListExpanded, setIsListExpanded] = useState(false);
   const [initialRenderComplete, setInitialRenderComplete] = useState(false);
+
+  // ReactFlowインスタンスの取得
+  const reactFlowInstance = useReactFlow();
 
   // マインドマップリストの読み込み
   useEffect(() => {
@@ -50,7 +53,7 @@ const Flow = () => {
       try {
         const list = await getMindmapList();
         setMindmapList(list);
-        
+
         // リストが空の場合はデフォルトのマインドマップを追加
         if (list.length === 0) {
           const defaultNode = {
@@ -65,51 +68,60 @@ const Flow = () => {
             },
             position: { x: 0, y: 0 }
           };
-          
+
           await saveMindmap('default', [defaultNode]);
-          setMindmapList([{id: 'default', title: 'New Mindmap'}]);
+          setMindmapList([{ id: 'default', title: 'New Mindmap' }]);
         }
       } catch (error) {
         console.error('Failed to load mindmap list:', error);
       }
     };
-    
+
     loadMindmapList();
   }, []);
-  
+
   // マインドマップの切り替え
   const switchMindmap = useCallback(async (id: string) => {
     if (id === currentMindmapId) return;
-    
+
     setIsLoading(true);
     try {
       const loadedNodes = await loadMindmap(id);
       setNodes(loadedNodes);
-      
+
       setTimeout(() => {
         const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
           loadedNodes,
           'LR',
           getNode
         );
-        
+
         setNodes(layoutedNodes);
         setEdges(layoutedEdges);
         setCurrentMindmapId(id);
         setIsLoading(false);
         setInitialRenderComplete(false); // 新しいマインドマップのためにリセット
+
+        // 少し遅延させてからfitViewを実行
+        setTimeout(() => {
+          reactFlowInstance.fitView({
+            padding: 0.3,
+            includeHiddenNodes: false,
+            duration: 800
+          });
+        }, 300);
       }, 200);
     } catch (error) {
-      console.error('マインドマップの切り替えに失敗しました:', error);
+      console.error('Failed to switch mindmap:', error);
       setIsLoading(false);
     }
-  }, [currentMindmapId, getNode, setNodes, setEdges]);
-  
+  }, [currentMindmapId, getNode, setNodes, setEdges, reactFlowInstance]);
+
   // 新しいマインドマップの作成
   const createNewMindmap = useCallback(async () => {
     const newId = `mindmap-${Date.now()}`;
     const newTitle = 'New Mindmap';
-    
+
     try {
       const rootNode = {
         id: 'root',
@@ -123,9 +135,9 @@ const Flow = () => {
         },
         position: { x: 0, y: 0 }
       };
-      
+
       await saveMindmap(newId, [rootNode]);
-      setMindmapList(prev => [...prev, {id: newId, title: newTitle}]);
+      setMindmapList(prev => [...prev, { id: newId, title: newTitle }]);
       switchMindmap(newId);
     } catch (error) {
       console.error('Failed to create new mindmap:', error);
@@ -138,14 +150,14 @@ const Flow = () => {
       const saveData = async () => {
         try {
           await saveMindmap(currentMindmapId, nodes);
-          
+
           // ルートノードのラベルが変更された場合、リストも更新
           const rootNode = nodes.find(n => n.id === 'root');
           if (rootNode) {
-            setMindmapList(prev => 
-              prev.map(item => 
-                item.id === currentMindmapId 
-                  ? {...item, title: rootNode.data.label as string} 
+            setMindmapList(prev =>
+              prev.map(item =>
+                item.id === currentMindmapId
+                  ? { ...item, title: rootNode.data.label as string }
                   : item
               )
             );
@@ -154,7 +166,7 @@ const Flow = () => {
           console.error('データの保存に失敗しました:', error);
         }
       };
-      
+
       const timer = setTimeout(saveData, 500);
       return () => clearTimeout(timer);
     }
@@ -167,7 +179,7 @@ const Flow = () => {
         setIsLoading(true);
         const loadedNodes = await loadMindmap(currentMindmapId);
         setNodes(loadedNodes);
-        
+
         // レイアウトを計算
         setTimeout(() => {
           const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
@@ -175,7 +187,7 @@ const Flow = () => {
             'LR',
             getNode
           );
-          
+
           setNodes(layoutedNodes);
           setEdges(layoutedEdges);
           setIsLoading(false);
@@ -185,7 +197,7 @@ const Flow = () => {
         setIsLoading(false);
       }
     };
-    
+
     loadData();
   }, [currentMindmapId, getNode, setNodes, setEdges]);
 
@@ -197,10 +209,21 @@ const Flow = () => {
         direction,
         getNode,
       );
+
+      // ノードとエッジを更新
       setNodes([...layoutedNodes]);
       setEdges([...layoutedEdges]);
+
+      // レイアウト適用後に全ノードが表示されるようにビューを調整
+      setTimeout(() => {
+        reactFlowInstance.fitView({
+          padding: 0.3,
+          includeHiddenNodes: false,
+          duration: 500
+        });
+      }, 100);
     },
-    [nodes, getNode, setNodes, setEdges]
+    [nodes, getNode, setNodes, setEdges, reactFlowInstance]
   );
 
   // ノード変更ハンドラー
@@ -252,10 +275,10 @@ const Flow = () => {
       // Tab キー: 子ノード追加
       if (e.key === 'Tab' && !e.shiftKey) {
         e.preventDefault();
-        
+
         // 編集中フラグを先に設定して、他のノードが編集モードに入るのを防止
         setIsEditing(true);
-        
+
         const newNodeId = crypto.randomUUID();
 
         addNodes([{
@@ -292,10 +315,10 @@ const Flow = () => {
       // Enter キー: 兄弟ノード追加（同様に修正）
       if (e.key === 'Enter') {
         e.preventDefault();
-        
+
         // 編集中フラグを先に設定
         setIsEditing(true);
-        
+
         const newNodeId = crypto.randomUUID();
         const nodeData = selectedNode.data as NodeData;
 
@@ -377,12 +400,12 @@ const Flow = () => {
       target.closest('.node-toolbar') ||
       target.closest('[data-toolbar-button="true"]') ||
       target.closest('[data-lexical-editor="true"]');
-    
+
     if (isToolbarClick) {
       event.stopPropagation();
       return;
     }
-    
+
     if (isEditing && currentEditingNodeId) {
       const endEditEvent = new CustomEvent('endNodeEdit', {
         detail: { nodeId: currentEditingNodeId }
@@ -393,25 +416,26 @@ const Flow = () => {
     }
   }, [isEditing, currentEditingNodeId, setIsEditing, setCurrentEditingNodeId]);
 
-  // 初期レンダリング後にビューをフィットさせる
-  const reactFlowInstance = useReactFlow();
-
+  // 初期レンダリング時のfitView
   useEffect(() => {
-    if (!initialRenderComplete && !isLoading && nodes.length > 0) {
+    if (!isLoading && nodes.length > 0 && !initialRenderComplete) {
+      // 少し遅延させてレイアウトが完全に計算された後に実行
       const timer = setTimeout(() => {
+        // レイアウトを適用
         onLayout('LR');
-        
+
+        // 全ノードが表示されるようにビューを調整
         reactFlowInstance.fitView({
-          padding: 0.2,
-          includeHiddenNodes: false
+          padding: 0.3, // 余白を設定
+          includeHiddenNodes: false, // 非表示ノードは除外
+          duration: 800 // アニメーション時間（ミリ秒）
         });
-        
         setInitialRenderComplete(true);
       }, 50);
-      
+
       return () => clearTimeout(timer);
     }
-  }, [reactFlowInstance, onLayout, initialRenderComplete, isLoading, nodes]);
+  }, [isLoading, nodes, reactFlowInstance, initialRenderComplete, onLayout]);
 
   // ノード削除イベントのリスナー
   useEffect(() => {
@@ -439,12 +463,12 @@ const Flow = () => {
   // マインドマップの削除関数を追加
   const deleteMindmap = useCallback(async (id: string, e: React.MouseEvent) => {
     e.stopPropagation(); // クリックイベントの伝播を止める
-    
+
     // 確認ダイアログ
     if (!confirm('Are you sure you want to delete this mindmap?')) {
       return;
     }
-    
+
     try {
       // 現在表示中のマインドマップを削除しようとした場合
       if (id === currentMindmapId) {
@@ -454,13 +478,13 @@ const Flow = () => {
           await switchMindmap(otherMindmap.id);
         }
       }
-      
+
       // IndexedDBから削除
       await deleteMindmapFromDB(id);
-      
+
       // リストから削除
       setMindmapList(prev => prev.filter(item => item.id !== id));
-      
+
       // 全て削除された場合は新しいマインドマップを作成
       if (mindmapList.length <= 1) {
         createNewMindmap();
@@ -474,11 +498,11 @@ const Flow = () => {
   useEffect(() => {
     const handleNodeEditStart = (event: CustomEvent<{ nodeId: string }>) => {
       const { nodeId } = event.detail;
-      
+
       // 編集対象のノードを取得
       const nodeToFocus = getNode(nodeId);
       if (!nodeToFocus) return;
-      
+
       // ノードを中央に表示
       setTimeout(() => {
         reactFlowInstance.fitView({
@@ -491,7 +515,7 @@ const Flow = () => {
 
     window.addEventListener('startNodeEdit', handleNodeEditStart as EventListener);
     window.addEventListener('autoEditNode', handleNodeEditStart as EventListener);
-    
+
     return () => {
       window.removeEventListener('startNodeEdit', handleNodeEditStart as EventListener);
       window.removeEventListener('autoEditNode', handleNodeEditStart as EventListener);
@@ -540,14 +564,14 @@ const Flow = () => {
               <div className={`px-3 py-2 rounded-full text-sm font-medium ${isEditing ? "bg-indigo-500 text-white" : "bg-gray-200 text-gray-700"}`}>
                 {isEditing ? "Edit Mode" : "View Mode"}
               </div>
-              <button 
+              <button
                 className='px-3 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-full text-sm font-medium shadow-sm hover:shadow-md transition-all flex items-center gap-1'
                 onClick={createNewMindmap}
               >
                 <Plus size={16} />
                 Create New
               </button>
-              <button 
+              <button
                 className={`px-3 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-1 ${isListExpanded ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
                 onClick={() => setIsListExpanded(!isListExpanded)}
               >
@@ -555,7 +579,7 @@ const Flow = () => {
                 Mindmap List
               </button>
             </div>
-            
+
             {isListExpanded && mindmapList.length > 0 && (
               <div className='bg-white rounded-lg shadow-inner border border-gray-100 overflow-hidden'>
                 <div className='p-3 border-b border-gray-100 bg-gray-50'>
@@ -563,7 +587,7 @@ const Flow = () => {
                 </div>
                 <ul className='max-h-60 overflow-y-auto divide-y divide-gray-100'>
                   {mindmapList.map(item => (
-                    <li 
+                    <li
                       key={item.id}
                       className={`p-3 cursor-pointer transition-colors flex items-center justify-between ${item.id === currentMindmapId ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50 text-gray-700'}`}
                       onClick={() => switchMindmap(item.id)}
@@ -572,7 +596,7 @@ const Flow = () => {
                         <BookOpen size={16} className={`mr-2 flex-shrink-0 ${item.id === currentMindmapId ? 'text-indigo-500' : 'text-gray-400'}`} />
                         <span className="truncate">{item.title}</span>
                       </div>
-                      
+
                       {/* 削除ボタン - 最後の1つは削除できないようにする */}
                       {mindmapList.length > 1 && (
                         <button
