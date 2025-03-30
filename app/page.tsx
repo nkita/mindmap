@@ -232,10 +232,17 @@ const Flow = () => {
     }
   }, [setNodes]);
 
-  // キーボードショートカットの処理
+  // キーボードショートカットの処理を修正
   useEffect(() => {
     const handleKeyDown = (e: globalThis.KeyboardEvent) => {
-      if (isEditing) return;
+      // 編集モード中はTabキーのショートカットを無効化
+      if (isEditing) {
+        // Tabキーが押された場合、デフォルトの動作を防止するだけにする
+        if (e.key === 'Tab' && !e.shiftKey) {
+          e.preventDefault();
+        }
+        return;
+      }
 
       const selectedNodes = getNodes().filter(n => n.selected);
       if (selectedNodes.length !== 1) return;
@@ -245,6 +252,10 @@ const Flow = () => {
       // Tab キー: 子ノード追加
       if (e.key === 'Tab' && !e.shiftKey) {
         e.preventDefault();
+        
+        // 編集中フラグを先に設定して、他のノードが編集モードに入るのを防止
+        setIsEditing(true);
+        
         const newNodeId = crypto.randomUUID();
 
         addNodes([{
@@ -267,6 +278,9 @@ const Flow = () => {
           showChildren: true
         });
 
+        // 現在編集中のノードIDを設定
+        setCurrentEditingNodeId(newNodeId);
+
         setTimeout(() => {
           const editEvent = new CustomEvent('autoEditNode', {
             detail: { nodeId: newNodeId }
@@ -275,9 +289,13 @@ const Flow = () => {
         }, 100);
       }
 
-      // Enter キー: 兄弟ノード追加
+      // Enter キー: 兄弟ノード追加（同様に修正）
       if (e.key === 'Enter') {
         e.preventDefault();
+        
+        // 編集中フラグを先に設定
+        setIsEditing(true);
+        
         const newNodeId = crypto.randomUUID();
         const nodeData = selectedNode.data as NodeData;
 
@@ -296,6 +314,9 @@ const Flow = () => {
           selected: true
         }]);
 
+        // 現在編集中のノードIDを設定
+        setCurrentEditingNodeId(newNodeId);
+
         setTimeout(() => {
           const editEvent = new CustomEvent('autoEditNode', {
             detail: { nodeId: newNodeId }
@@ -307,7 +328,7 @@ const Flow = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isEditing, getNodes, addNodes, updateNodeData]);
+  }, [isEditing, getNodes, addNodes, updateNodeData, setIsEditing, setCurrentEditingNodeId]);
 
   // カスタムイベントリスナー - 子ノードの表示状態変更
   useEffect(() => {
@@ -449,10 +470,40 @@ const Flow = () => {
     }
   }, [currentMindmapId, mindmapList, switchMindmap, createNewMindmap]);
 
+  // カスタムイベントリスナー - ノード編集開始時に中央に表示
+  useEffect(() => {
+    const handleNodeEditStart = (event: CustomEvent<{ nodeId: string }>) => {
+      const { nodeId } = event.detail;
+      
+      // 編集対象のノードを取得
+      const nodeToFocus = getNode(nodeId);
+      if (!nodeToFocus) return;
+      
+      // ノードを中央に表示
+      setTimeout(() => {
+        reactFlowInstance.fitView({
+          padding: 0.5,
+          includeHiddenNodes: false,
+          nodes: [nodeToFocus]
+        });
+      }, 50);
+    };
+
+    window.addEventListener('startNodeEdit', handleNodeEditStart as EventListener);
+    window.addEventListener('autoEditNode', handleNodeEditStart as EventListener);
+    
+    return () => {
+      window.removeEventListener('startNodeEdit', handleNodeEditStart as EventListener);
+      window.removeEventListener('autoEditNode', handleNodeEditStart as EventListener);
+    };
+  }, [getNode, reactFlowInstance]);
+
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen w-screen">
-        <div className="text-2xl">マインドマップを読み込み中...</div>
+      <div className="flex flex-col items-center justify-center h-screen w-screen bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500 mb-4"></div>
+        <div className="text-xl font-medium text-gray-700">Loading your mindmap...</div>
+        <div className="text-sm text-gray-500 mt-2">Please wait a moment</div>
       </div>
     );
   }
