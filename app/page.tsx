@@ -632,7 +632,10 @@ const Flow = () => {
             )}
           </div>
         </Panel>
-        <Background color="#fff" />
+        <Background 
+          color="#e6f0ff"  
+          className="bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-100" 
+        />
         <Controls />
       </ReactFlow>
     </div>

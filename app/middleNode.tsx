@@ -285,9 +285,13 @@ export const MiddleNode = ({ ...node }) => {
 
             {/* ノードの内容 */}
             <div
-                className={`w-full text-[8px] relative bg-zinc-50 dark:bg-blue-900/10 text-card-foreground px-2 inline-block border rounded-md p-2 
-                    ${isNodeEditing ? 'hover:cursor-text border-emerald-500' : `${node.selected ? 'border-blue-500' : 'border-transparent'}`}
-                    `}>
+                className={`w-full text-[8px] relative bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-3 py-2 inline-block border rounded-lg shadow-sm transition-all
+                    ${isNodeEditing 
+                        ? 'hover:cursor-text border-teal-500 dark:border-teal-400 ring-2 ring-teal-500/20 dark:ring-teal-400/20 shadow-md' 
+                        : `${node.selected 
+                            ? 'border-blue-500 dark:border-blue-400 ring-2 ring-blue-500/20 dark:ring-blue-400/20 shadow-md' 
+                            : 'border-blue-100 dark:border-blue-900/50 hover:border-blue-200 dark:hover:border-blue-800 hover:shadow-md'}`
+                    }`}>
 
                 {isNodeEditing ? (
                     <RichTextEditor
@@ -310,7 +314,7 @@ export const MiddleNode = ({ ...node }) => {
                                 isEditing={false}
                             />
                         ) : (
-                            label || <span className="text-zinc-400">No idea.</span>
+                            label || <span className="text-slate-400 dark:text-slate-500 italic">No idea.</span>
                         )}
                     </div>
                 )}
