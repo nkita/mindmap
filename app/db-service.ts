@@ -100,4 +100,20 @@ export const getMindmapList = async (): Promise<{id: string, title: string}[]> =
     
     transaction.oncomplete = () => db.close();
   });
+};
+
+// マインドマップの削除
+export const deleteMindmapFromDB = async (id: string): Promise<void> => {
+  const db = await initializeDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(['mindmaps'], 'readwrite');
+    const store = transaction.objectStore('mindmaps');
+    
+    const request = store.delete(id);
+    
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject('Failed to delete mindmap');
+    
+    transaction.oncomplete = () => db.close();
+  });
 }; 

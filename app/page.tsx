@@ -19,11 +19,12 @@ import '@xyflow/react/dist/style.css';
 import { MiddleNode } from './middleNode';
 import { MindMapProvider, MindMapContext } from './provider';
 import { getLayoutedElements, NodeData } from './helper-custom-layout';
-import { Plus, ChevronDown, BookOpen } from 'lucide-react';
+import { Plus, ChevronDown, BookOpen, Trash2 } from 'lucide-react';
 import { 
   saveMindmap, 
   loadMindmap, 
-  getMindmapList 
+  getMindmapList,
+  deleteMindmapFromDB
 } from './db-service';
 import { 
   handleNodeChanges, 
@@ -414,6 +415,40 @@ const Flow = () => {
     return () => window.removeEventListener('deleteNodes', handleDeleteNodes as EventListener);
   }, [onNodesChangeWithAutoLayout, nodes, getNode, setNodes, setEdges]);
 
+  // マインドマップの削除関数を追加
+  const deleteMindmap = useCallback(async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // クリックイベントの伝播を止める
+    
+    // 確認ダイアログ
+    if (!confirm('Are you sure you want to delete this mindmap?')) {
+      return;
+    }
+    
+    try {
+      // 現在表示中のマインドマップを削除しようとした場合
+      if (id === currentMindmapId) {
+        // 他のマインドマップがあれば切り替え
+        const otherMindmap = mindmapList.find(item => item.id !== id);
+        if (otherMindmap) {
+          await switchMindmap(otherMindmap.id);
+        }
+      }
+      
+      // IndexedDBから削除
+      await deleteMindmapFromDB(id);
+      
+      // リストから削除
+      setMindmapList(prev => prev.filter(item => item.id !== id));
+      
+      // 全て削除された場合は新しいマインドマップを作成
+      if (mindmapList.length <= 1) {
+        createNewMindmap();
+      }
+    } catch (error) {
+      console.error('Failed to delete mindmap:', error);
+    }
+  }, [currentMindmapId, mindmapList, switchMindmap, createNewMindmap]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen w-screen">
@@ -479,11 +514,24 @@ const Flow = () => {
                   {mindmapList.map(item => (
                     <li 
                       key={item.id}
-                      className={`p-3 cursor-pointer transition-colors flex items-center ${item.id === currentMindmapId ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50 text-gray-700'}`}
+                      className={`p-3 cursor-pointer transition-colors flex items-center justify-between ${item.id === currentMindmapId ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50 text-gray-700'}`}
                       onClick={() => switchMindmap(item.id)}
                     >
-                      <BookOpen size={16} className={`mr-2 ${item.id === currentMindmapId ? 'text-indigo-500' : 'text-gray-400'}`} />
-                      <span className="truncate">{item.title}</span>
+                      <div className="flex items-center overflow-hidden">
+                        <BookOpen size={16} className={`mr-2 flex-shrink-0 ${item.id === currentMindmapId ? 'text-indigo-500' : 'text-gray-400'}`} />
+                        <span className="truncate">{item.title}</span>
+                      </div>
+                      
+                      {/* 削除ボタン - 最後の1つは削除できないようにする */}
+                      {mindmapList.length > 1 && (
+                        <button
+                          className="p-1 rounded-full hover:bg-red-100 hover:text-red-500 transition-colors ml-2 flex-shrink-0"
+                          onClick={(e) => deleteMindmap(item.id, e)}
+                          title="Delete mindmap"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </li>
                   ))}
                 </ul>
