@@ -274,7 +274,7 @@ const Flow = () => {
   // キーボードショートカットの処理を修正
   useEffect(() => {
     const handleKeyDown = (e: globalThis.KeyboardEvent) => {
-      // 編集モード中はTabキーのショートカットを無効化
+      // 編集モード中はショートカットを無効化
       if (isEditing) {
         // Tabキーが押された場合、デフォルトの動作を防止するだけにする
         if (e.key === 'Tab' && !e.shiftKey) {
@@ -288,9 +288,62 @@ const Flow = () => {
 
       const selectedNode = selectedNodes[0];
 
-      // Tab キー: 子ノード追加
+      // Delete キー: 選択中のノードを削除
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        
+        // ルートノードは削除できないようにする
+        if (selectedNode.id === 'root') {
+          return;
+        }
+        
+        // 削除対象のノードIDを収集
+        const nodesToDelete = collectNodesToDelete(selectedNode.id, getNodes());
+        
+        // 削除イベントを発火
+        const deleteEvent = new CustomEvent('deleteNodes', {
+          detail: {
+            changes: nodesToDelete.map(id => ({
+              type: 'remove' as const,
+              id
+            }))
+          }
+        });
+        window.dispatchEvent(deleteEvent);
+        
+        return;
+      }
+
+      // F2キー: 選択中のノードを編集モードに
+      if (e.key === 'F2') {
+        e.preventDefault();
+        
+        // 編集中フラグを設定
+        setIsEditing(true);
+        setCurrentEditingNodeId(selectedNode.id);
+        
+        // 編集開始イベントを発火
+        setTimeout(() => {
+          const editEvent = new CustomEvent('startNodeEdit', {
+            detail: { nodeId: selectedNode.id }
+          });
+          window.dispatchEvent(editEvent);
+        }, 50);
+        
+        return;
+      }
+
+      // Tab キー: 子ノード追加（子ノードが存在する場合は無効）
       if (e.key === 'Tab' && !e.shiftKey) {
         e.preventDefault();
+        
+        // 子ノードが存在するかチェック
+        const hasChildNodes = getNodes().some(node => node.data.parent === selectedNode.id);
+        
+        // 子ノードが存在する場合は処理を中止
+        if (hasChildNodes) {
+          return;
+        }
 
         // 編集中フラグを先に設定して、他のノードが編集モードに入るのを防止
         setIsEditing(true);
@@ -540,6 +593,26 @@ const Flow = () => {
     };
   }, [getNode, reactFlowInstance]);
 
+  // 簡易マニュアルパネル（閉じる機能付き）
+  const [isHelpVisible, setIsHelpVisible] = useState(true);
+
+  // ノードとその子孫を全て収集する関数
+  const collectNodesToDelete = (nodeId: string, allNodes: Node[]): string[] => {
+    const result: string[] = [nodeId];
+    
+    // 子ノードを再帰的に収集
+    const collectChildren = (parentId: string) => {
+      const childNodes = allNodes.filter(n => n.data.parent === parentId);
+      childNodes.forEach(child => {
+        result.push(child.id);
+        collectChildren(child.id);
+      });
+    };
+    
+    collectChildren(nodeId);
+    return result;
+  };
+
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-screen w-screen bg-gray-50">
@@ -632,9 +705,95 @@ const Flow = () => {
             )}
           </div>
         </Panel>
-        <Background 
-          color="#e6f0ff"  
-          className="bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-100" 
+        <Panel position="bottom-right">
+          {isHelpVisible ? (
+            <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-md p-4 rounded-xl shadow-lg border border-blue-100 dark:border-blue-900 max-w-xs relative">
+              <button 
+                className="absolute top-2 right-2 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors"
+                onClick={() => setIsHelpVisible(false)}
+                aria-label="Close help"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+              
+              <div className="flex items-center mb-3">
+                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">ショートカット</h3>
+              </div>
+              
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-600 dark:text-slate-300">ノード編集</span>
+                  <kbd className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded text-slate-500 dark:text-slate-400 font-mono text-[10px]">F2</kbd>
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-600 dark:text-slate-300">子ノード追加</span>
+                  <kbd className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded text-slate-500 dark:text-slate-400 font-mono text-[10px]">Tab</kbd>
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-600 dark:text-slate-300">兄弟ノード追加</span>
+                  <kbd className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded text-slate-500 dark:text-slate-400 font-mono text-[10px]">Enter</kbd>
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-600 dark:text-slate-300">ノード削除</span>
+                  <kbd className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded text-slate-500 dark:text-slate-400 font-mono text-[10px]">Delete</kbd>
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-600 dark:text-slate-300">編集キャンセル</span>
+                  <kbd className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded text-slate-500 dark:text-slate-400 font-mono text-[10px]">Esc</kbd>
+                </div>
+              </div>
+              
+              <div className="mt-4 pt-3 border-t border-blue-50 dark:border-blue-900/30">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">ノードの状態</h3>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded border border-blue-100 dark:border-blue-900/50 bg-white dark:bg-slate-800"></div>
+                    <span className="text-xs text-slate-600 dark:text-slate-300">通常</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded border border-blue-500 dark:border-blue-400 ring-2 ring-blue-500/20 dark:ring-blue-400/20 bg-white dark:bg-slate-800"></div>
+                    <span className="text-xs text-slate-600 dark:text-slate-300">選択中</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded border border-teal-500 dark:border-teal-400 ring-2 ring-teal-500/20 dark:ring-teal-400/20 bg-white dark:bg-slate-800"></div>
+                    <span className="text-xs text-slate-600 dark:text-slate-300">編集中</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="mt-4 text-[10px] text-slate-500 dark:text-slate-400 italic">
+                ヒント: ダブルクリックでノードを編集できます
+              </div>
+            </div>
+          ) : (
+            <button 
+              className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-md p-2 rounded-full shadow-lg border border-blue-100 dark:border-blue-900 hover:bg-white dark:hover:bg-slate-700 transition-colors"
+              onClick={() => setIsHelpVisible(true)}
+              aria-label="Show help"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500 dark:text-blue-400">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+              </svg>
+            </button>
+          )}
+        </Panel>
+        <Background
+          color="#e6f0ff"
+          className="bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-100"
         />
         <Controls />
       </ReactFlow>
