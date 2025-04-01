@@ -1,3 +1,6 @@
+// React の useEffect をインポートする
+import { useEffect } from 'react';
+
 // イベント処理を共通化するためのユーティリティファイル
 
 // イベント名の定数
@@ -90,16 +93,21 @@ export function dispatchDeleteNodes(nodeIds: string[]): void {
 }
 
 // イベントリスナー登録のヘルパー関数
-export function addEventListenerWithCleanup<T>(
-  eventName: string,
-  handler: (event: CustomEvent<T>) => void,
-  deps: React.DependencyList,
-  useEffectHook: (effect: React.EffectCallback, deps?: React.DependencyList) => void
-): void {
-  useEffectHook(() => {
+export const useEventListener = <T>(
+  eventName: string, 
+  handler: (event: CustomEvent<T>) => void, 
+  dependencies: readonly unknown[] = []
+) => {
+  useEffect(() => {
     window.addEventListener(eventName, handler as EventListener);
-    return () => {
-      window.removeEventListener(eventName, handler as EventListener);
-    };
-  }, deps);
-} 
+    return () => window.removeEventListener(eventName, handler as EventListener);
+  }, [eventName, handler, dependencies]);
+};
+
+export const addEventListenerWithCleanup = <T>(
+  eventName: string, 
+  handler: (event: CustomEvent<T>) => void
+) => {
+  window.addEventListener(eventName, handler as EventListener);
+  return () => window.removeEventListener(eventName, handler as EventListener);
+}; 

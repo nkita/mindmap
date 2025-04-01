@@ -1,4 +1,4 @@
-import { Node, Edge } from "@xyflow/react";
+import { Node } from "@xyflow/react";
 import { NodeData } from "../helper-custom-layout";
 import { dispatchAutoEditNode } from "../events";
 

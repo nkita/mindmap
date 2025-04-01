@@ -193,15 +193,13 @@ export const MiddleNode = ({ ...node }) => {
     }, [node.id, node.data, showChildren, updateNodeData]);
 
     // 自動編集モードの処理
-    addEventListenerWithCleanup<{ nodeId: string }>(
+    addEventListenerWithCleanup(
         EVENTS.AUTO_EDIT_NODE,
-        (event) => {
+        (event: CustomEvent<{ nodeId: string }>) => {
             if (event.detail.nodeId === node.id) {
                 onEdit();
             }
-        },
-        [node.id, onEdit],
-        useEffect
+        }
     );
 
     // このノードが自動編集フラグを持っている場合、編集モードを有効にする
@@ -218,17 +216,15 @@ export const MiddleNode = ({ ...node }) => {
     }, [node.id, node.data, onEdit, updateNodeData]);
 
     // 編集終了イベントのリスナー
-    addEventListenerWithCleanup<{ nodeId: string }>(
+    addEventListenerWithCleanup(
         EVENTS.END_NODE_EDIT,
-        (event) => {
+        (event: CustomEvent<{ nodeId: string }>) => {
             if (event.detail.nodeId === node.id) {
                 // このノードの編集を終了
                 setIsEditing(false);
                 updateNodeData(node.id, { label, editorState, showChildren });
             }
-        },
-        [node.id, label, editorState, showChildren, updateNodeData],
-        useEffect
+        }
     );
 
     // 削除ボタンの処理
