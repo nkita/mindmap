@@ -1,6 +1,7 @@
 import './globals.css';
 import type { Metadata, Viewport } from 'next';
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from 'next/script';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -40,6 +41,7 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const gaid = process.env.GAID
   return (
     <html lang="en">
       <head>
@@ -54,6 +56,16 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <Script src={"https://www.googletagmanager.com/gtag/js?id=" + gaid} />
+        <Script id="google-analytics">
+          {`
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+ 
+                gtag('config', "${gaid}");
+            `}
+        </Script>
         {children}
       </body>
     </html>

@@ -19,7 +19,7 @@ import '@xyflow/react/dist/style.css';
 import { MiddleNode } from './middleNode';
 import { MindMapProvider, MindMapContext } from './provider';
 import { getLayoutedElements, NodeData } from './helper-custom-layout';
-import { ChevronDown, Wifi, WifiOff, Wallpaper, Pencil, BookOpen, Plus } from 'lucide-react';
+import { ChevronDown, Wifi, WifiOff, Wallpaper, Pencil, BookOpen, Plus, FileText, HelpCircle } from 'lucide-react';
 import {
   saveMindmap,
   loadMindmap,
@@ -31,6 +31,7 @@ import {
   updateChildNodesDisplay
 } from './node-operations';
 import MindmapList from './components/MindmapList';
+import PrivacyTermsDialog from './components/PrivacyTermsDialog';
 
 // Flowコンポーネント
 const Flow = () => {
@@ -45,6 +46,8 @@ const Flow = () => {
   const [isListExpanded, setIsListExpanded] = useState(false);
   const [initialRenderComplete, setInitialRenderComplete] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
+  const [isHelpVisible, setIsHelpVisible] = useState(false);
+  const [isPrivacyTermsOpen, setIsPrivacyTermsOpen] = useState(false);
 
   // ReactFlowインスタンスの取得
   const reactFlowInstance = useReactFlow();
@@ -595,26 +598,6 @@ const Flow = () => {
     };
   }, [getNode, reactFlowInstance]);
 
-  // 簡易マニュアルパネル（閉じる機能付き）
-  const [isHelpVisible, setIsHelpVisible] = useState(true);
-
-  // ノードとその子孫を全て収集する関数
-  const collectNodesToDelete = (nodeId: string, allNodes: Node[]): string[] => {
-    const result: string[] = [nodeId];
-
-    // 子ノードを再帰的に収集
-    const collectChildren = (parentId: string) => {
-      const childNodes = allNodes.filter(n => n.data.parent === parentId);
-      childNodes.forEach(child => {
-        result.push(child.id);
-        collectChildren(child.id);
-      });
-    };
-
-    collectChildren(nodeId);
-    return result;
-  };
-
   // オフライン状態の検出と監視を追加
   useEffect(() => {
     // 初期状態を設定
@@ -632,6 +615,23 @@ const Flow = () => {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+  // ノードとその子孫を全て収集する関数
+  const collectNodesToDelete = (nodeId: string, allNodes: Node[]): string[] => {
+    const result: string[] = [nodeId];
+
+    // 子ノードを再帰的に収集
+    const collectChildren = (parentId: string) => {
+      const childNodes = allNodes.filter(n => n.data.parent === parentId);
+      childNodes.forEach(child => {
+        result.push(child.id);
+        collectChildren(child.id);
+      });
+    };
+
+    collectChildren(nodeId);
+    return result;
+  };
 
   if (isLoading) {
     return (
@@ -731,90 +731,103 @@ const Flow = () => {
           </div>
         </Panel>
         <Panel position="bottom-right">
-          {isHelpVisible ? (
-            <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-md p-4 rounded-xl shadow-lg border border-blue-100 dark:border-blue-900 max-w-xs relative">
+          <div className="flex flex-col gap-2 items-end">
+            {/* ヘルプパネル */}
+            {isHelpVisible && (
+              <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-md p-4 rounded-xl shadow-lg border border-blue-100 dark:border-blue-900 max-w-xs relative">
+                <button
+                  className="absolute top-2 right-2 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors hover:cursor-pointer"
+                  onClick={() => setIsHelpVisible(false)}
+                  aria-label="Close help"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+
+                {/* ヘルプコンテンツ */}
+                <div className="flex items-center mb-3">
+                  <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Shortcuts</h3>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-600 dark:text-slate-300">Edit Node</span>
+                    <kbd className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded text-slate-500 dark:text-slate-400 font-mono text-[10px]">F2</kbd>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-600 dark:text-slate-300">Add Child Node</span>
+                    <kbd className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded text-slate-500 dark:text-slate-400 font-mono text-[10px]">Tab</kbd>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-600 dark:text-slate-300">Add Sibling Node</span>
+                    <kbd className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded text-slate-500 dark:text-slate-400 font-mono text-[10px]">Enter</kbd>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-600 dark:text-slate-300">Delete Node</span>
+                    <kbd className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded text-slate-500 dark:text-slate-400 font-mono text-[10px]">Delete</kbd>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-600 dark:text-slate-300">Cancel Edit</span>
+                    <kbd className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded text-slate-500 dark:text-slate-400 font-mono text-[10px]">Esc</kbd>
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-blue-50 dark:border-blue-900/30">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Node States</h3>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 rounded border border-blue-100 dark:border-blue-900/50 bg-white dark:bg-slate-800"></div>
+                      <span className="text-xs text-slate-600 dark:text-slate-300">Normal</span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 rounded border border-blue-500 dark:border-blue-400 ring-2 ring-blue-500/20 dark:ring-blue-400/20 bg-white dark:bg-slate-800"></div>
+                      <span className="text-xs text-slate-600 dark:text-slate-300">Selected</span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 rounded border border-teal-500 dark:border-teal-400 ring-2 ring-teal-500/20 dark:ring-teal-400/20 bg-white dark:bg-slate-800"></div>
+                      <span className="text-xs text-slate-600 dark:text-slate-300">Editing</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 text-[10px] text-slate-500 dark:text-slate-400 italic">
+                  Tip: Double-click a node to edit it
+                </div>
+              </div>
+            )}
+
+            {/* ボタン行 - 常に同じ位置に表示 */}
+            <div className="flex gap-2">
               <button
-                className="absolute top-2 right-2 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors"
-                onClick={() => setIsHelpVisible(false)}
-                aria-label="Close help"
+                onClick={() => setIsPrivacyTermsOpen(true)}
+                className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-md px-3 py-2 rounded-lg shadow-lg border border-blue-100 dark:border-blue-900 hover:bg-white dark:hover:bg-slate-700 transition-colors hover:cursor-pointer flex items-center gap-2"
+                aria-label="Privacy & Terms"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18"></line>
-                  <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
+                <FileText size={16} className="text-blue-500 dark:text-blue-400" />
+                <span className="text-xs text-slate-600 dark:text-slate-300">Privacy & Terms</span>
               </button>
-
-              <div className="flex items-center mb-3">
-                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Shortcuts</h3>
-              </div>
-
-              <div className="space-y-2 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-600 dark:text-slate-300">Edit Node</span>
-                  <kbd className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded text-slate-500 dark:text-slate-400 font-mono text-[10px]">F2</kbd>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-600 dark:text-slate-300">Add Child Node</span>
-                  <kbd className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded text-slate-500 dark:text-slate-400 font-mono text-[10px]">Tab</kbd>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-600 dark:text-slate-300">Add Sibling Node</span>
-                  <kbd className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded text-slate-500 dark:text-slate-400 font-mono text-[10px]">Enter</kbd>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-600 dark:text-slate-300">Delete Node</span>
-                  <kbd className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded text-slate-500 dark:text-slate-400 font-mono text-[10px]">Delete</kbd>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-600 dark:text-slate-300">Cancel Edit</span>
-                  <kbd className="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded text-slate-500 dark:text-slate-400 font-mono text-[10px]">Esc</kbd>
-                </div>
-              </div>
-
-              <div className="mt-4 pt-3 border-t border-blue-50 dark:border-blue-900/30">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Node States</h3>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded border border-blue-100 dark:border-blue-900/50 bg-white dark:bg-slate-800"></div>
-                    <span className="text-xs text-slate-600 dark:text-slate-300">Normal</span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded border border-blue-500 dark:border-blue-400 ring-2 ring-blue-500/20 dark:ring-blue-400/20 bg-white dark:bg-slate-800"></div>
-                    <span className="text-xs text-slate-600 dark:text-slate-300">Selected</span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded border border-teal-500 dark:border-teal-400 ring-2 ring-teal-500/20 dark:ring-teal-400/20 bg-white dark:bg-slate-800"></div>
-                    <span className="text-xs text-slate-600 dark:text-slate-300">Editing</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 text-[10px] text-slate-500 dark:text-slate-400 italic">
-                Tip: Double-click a node to edit it
-              </div>
+              
+              <button
+                className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-md px-3 py-2 rounded-lg shadow-lg border border-blue-100 dark:border-blue-900 hover:bg-white dark:hover:bg-slate-700 transition-colors hover:cursor-pointer flex items-center gap-2"
+                onClick={() => setIsHelpVisible(!isHelpVisible)}
+                aria-label={isHelpVisible ? "Hide help" : "Show help"}
+              >
+                <HelpCircle size={16} className="text-blue-500 dark:text-blue-400" />
+                <span className="text-xs text-slate-600 dark:text-slate-300">Help</span>
+              </button>
             </div>
-          ) : (
-            <button
-              className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-md p-2 rounded-full shadow-lg border border-blue-100 dark:border-blue-900 hover:bg-white dark:hover:bg-slate-700 transition-colors"
-              onClick={() => setIsHelpVisible(true)}
-              aria-label="Show help"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500 dark:text-blue-400">
-                <circle cx="12" cy="12" r="10"></circle>
-                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-                <line x1="12" y1="17" x2="12.01" y2="17"></line>
-              </svg>
-            </button>
-          )}
+          </div>
         </Panel>
         <Background
           color="#e6f0ff"
@@ -822,6 +835,12 @@ const Flow = () => {
         />
         <Controls />
       </ReactFlow>
+      
+      {/* ダイアログコンポーネント */}
+      <PrivacyTermsDialog 
+        isOpen={isPrivacyTermsOpen} 
+        onClose={() => setIsPrivacyTermsOpen(false)} 
+      />
     </div>
   );
 };
