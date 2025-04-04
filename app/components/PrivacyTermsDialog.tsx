@@ -30,8 +30,6 @@ export default function PrivacyTermsDialog({
 
   return (
     <>
-      {/* ボタンは親コンポーネントから制御するため削除 */}
-      
       {/* ダイアログ */}
       {isOpen && (
         <div 
